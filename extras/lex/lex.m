@@ -6,7 +6,7 @@
 % Copyright (C) 2001-2002 Ralph Becket <rbeck@microsoft.com>
 % Sun Aug 20 09:08:46 BST 2000
 % Copyright (C) 2001-2002 The Rationalizer Intelligent Software AG
-%   The changes made by Rationalizer are contributed under the terms 
+%   The changes made by Rationalizer are contributed under the terms
 %   of the GNU Lesser General Public License, see the file COPYING.LGPL
 %   in this directory.
 % Copyright (C) 2002, 2006, 2010-2011 The University of Melbourne
@@ -14,10 +14,11 @@
 % This file may only be copied under the terms of the GNU Library General
 % Public License - see the file COPYING.LIB in the Mercury distribution.
 %
-% Thu Jul 26 07:45:47 UTC 2001
-%
 % This module puts everything together, compiling a list of lexemes
 % into state machines and turning the input stream into a token stream.
+%
+% Note that the astral charaters (in unicode) are not included in the range
+% of unicode characters, as the astral planes are very sparsely assigned.
 %
 %-----------------------------------------------------------------------------%
 
@@ -30,6 +31,8 @@
 :- import_module maybe.
 :- import_module pair.
 :- import_module string.
+:- import_module sparse_bitset.
+:- import_module enum.
 
 %-----------------------------------------------------------------------------%
 
@@ -72,6 +75,11 @@
 :- inst ignore_pred
     ==      ( pred(in) is semidet ).
 
+    % Represents a set of Unicode characters
+    %
+:- type charset
+    ==      sparse_bitset(char).
+
     % The type of regular expressions.
     %
 :- type regexp.
@@ -100,6 +108,7 @@
 :- instance regexp(regexp).
 :- instance regexp(char).
 :- instance regexp(string).
+:- instance regexp(sparse_bitset(T)) <= (regexp(T),enum(T)).
 
     % Some basic non-primitive regexps.
     %
@@ -107,6 +116,7 @@
 :- func anybut(string) = regexp.     % anybut("abc") is complement of any("abc")
 :- func ?(T) = regexp <= regexp(T).  % ?(R)       = R or null
 :- func +(T) = regexp <= regexp(T).  % +(R)       = R ++ *(R)
+:- func range(char, char) = regexp.  % range('a', 'z') = any("ab...xyz")
 
     % Some useful single-char regexps.
     %
@@ -117,14 +127,14 @@
 :- func alphanum = regexp.      % alphanum   = alpha or digit
 :- func identstart = regexp.    % identstart = alpha or "_"
 :- func ident = regexp.         % ident      = alphanum or "_"
-:- func nl = regexp.            % nl         = re("\n")
 :- func tab = regexp.           % tab        = re("\t")
 :- func spc = regexp.           % spc        = re(" ")
 :- func wspc = regexp.          % wspc       = any(" \t\n\r\f\v")
-:- func dot = regexp.           % dot        = anybut("\n")
+:- func dot = regexp.           % dot        = anybut("\r\n")
 
     % Some useful compound regexps.
     %
+:- func nl = regexp.            % nl         = ?("\r") ++ re("\n")
 :- func nat = regexp.           % nat        = +(digit)
 :- func signed_int = regexp.    % signed_int = ?("+" or "-") ++ nat
 :- func real = regexp.          % real       = \d+((.\d+([eE]int)?)|[eE]int)
@@ -132,9 +142,43 @@
 :- func whitespace = regexp.    % whitespace = *(wspc)
 :- func junk = regexp.          % junk       = *(dot)
 
+    % A range of charicters, inclusive of both the first and last values.
+    %
+:- type char_range
+    --->    char_range(
+                cr_first        :: int,
+                cr_last         :: int
+            ).
+
+    % charset(Start, End) = charset(Start `..` End)
+    %
+    % Throws an exception if Start > End.
+    %
+:- func charset(int, int) = charset.
+
+    % Function to create a sparse bitset from a range of Unicode
+    % codepoints. These codepoints are checked for validity, any invalid
+    % codepoints are ignored.  Throws an exception if cr_first value is less
+    % than cr_last.
+    %
+:- func charset(char_range) = charset.
+
+    % Creates a union of all char ranges in the list.  Returns the empty
+    % set if the list is empty.  Any invalid codepoints are ignored.
+    %
+:- func charset_from_ranges(list(char_range)) = charset.
+
+    % Latin is comprised of the following Unicode blocks:
+    %  * Basic Latin
+    %  * Latin1 Supplement
+    %  * Latin Extended-A
+    %  * Latin Extended-B
+    %
+:- func latin_chars = charset is det.
+
    % Utility predicate to create ignore_pred's.
    % Use it in the form `ignore(my_token)' to ignore just `my_token'.
-   % 
+   %
 :- pred ignore(Token::in, Token::in) is semidet.
 
    % Utility function to return noval tokens.
@@ -247,6 +291,7 @@
 :- import_module bool.
 :- import_module char.
 :- import_module exception.
+:- import_module require.
 :- import_module int.
 :- import_module map.
 
@@ -280,10 +325,10 @@
 
 :- inst lexer_instance
     --->    lexer_instance(
-                live_lexeme_list, 
-                init_winner_func, 
-                live_lexeme_list, 
-                winner, 
+                live_lexeme_list,
+                init_winner_func,
+                live_lexeme_list,
+                winner,
                 buf.buf_state,
                 ignore_pred
             ).
@@ -341,6 +386,20 @@ start(Lexer0, Src) = State :-
     is det.
 
 :- pragma foreign_proc("C",
+    lexer_inst_cast(Lexer0::in) = (Lexer::out(lexer)),
+    [will_not_call_mercury, promise_pure, thread_safe],
+"
+    Lexer = Lexer0;
+").
+
+:- pragma foreign_proc("Java",
+    lexer_inst_cast(Lexer0::in) = (Lexer::out(lexer)),
+    [will_not_call_mercury, promise_pure, thread_safe],
+"
+    Lexer = Lexer0;
+").
+
+:- pragma foreign_proc("C#",
     lexer_inst_cast(Lexer0::in) = (Lexer::out(lexer)),
     [will_not_call_mercury, promise_pure, thread_safe],
 "
@@ -460,7 +519,7 @@ process_char(Result, Char, !Instance, BufState, !Buf, !Src) :-
 %-----------------------------------------------------------------------------%
 
 :- pred process_any_winner(io.read_result(Tok), winner(Tok),
-            lexer_instance(Tok, Src), lexer_instance(Tok, Src), 
+            lexer_instance(Tok, Src), lexer_instance(Tok, Src),
             buf_state(Src), buf, buf, Src, Src).
 :- mode process_any_winner(out, in(winner),
             in(lexer_instance), out(lexer_instance),
@@ -554,8 +613,8 @@ process_eof(Result, !Instance, !.BufState, !.Buf) :-
 :- pred advance_live_lexemes(char, offset,
             list(live_lexeme(Token)), list(live_lexeme(Token)),
             winner(Token), winner(Token)).
-:- mode advance_live_lexemes(in, in, in(live_lexeme_list), 
-            out(live_lexeme_list), 
+:- mode advance_live_lexemes(in, in, in(live_lexeme_list),
+            out(live_lexeme_list),
             in(winner), out(winner)) is det.
 
 advance_live_lexemes(_Char, _Offset, [], [], !Winner).
@@ -587,7 +646,7 @@ advance_live_lexemes(Char, Offset, [L | Ls0], Ls, !Winner) :-
 
 :- pred live_lexeme_in_accepting_state(list(live_lexeme(Tok)),
                 token_creator(Tok)).
-:- mode live_lexeme_in_accepting_state(in(live_lexeme_list), 
+:- mode live_lexeme_in_accepting_state(in(live_lexeme_list),
                 out(token_creator)) is semidet.
 
 live_lexeme_in_accepting_state([L | Ls], Token) :-
@@ -679,7 +738,8 @@ read_from_string(Offset, Result, String, unsafe_promise_unique(String)) :-
     ;       atom(char)             % Match a single char
     ;       conc(regexp, regexp)   % Concatenation
     ;       alt(regexp, regexp)    % Alternation
-    ;       star(regexp).          % Kleene closure
+    ;       star(regexp)           % Kleene closure
+    ;       charset(charset).      % Matches any char in the set
 
 %-----------------------------------------------------------------------------%
 
@@ -696,10 +756,19 @@ read_from_string(Offset, Result, String, unsafe_promise_unique(String)) :-
         ( if S = "" then
             R = null
           else
-            L = string.length(S),
-            C = string.det_index(S, L - 1),
-            R = str_foldr(func(Cx, Rx) = (Cx ++ Rx), S, re(C), L - 2)
+            R = string.foldl(func(Char, R0) = R1 :-
+                ( if R0 = eps then R1 = re(Char) else R1 = R0 ++ re(Char) ),
+                S,
+                eps)
         )
+].
+
+:- instance regexp(sparse_bitset(T)) <= (regexp(T),enum(T)) where [
+    re(SparseBitset) = charset(Charset) :-
+        Charset = sparse_bitset.foldl(
+            func(Enum, Set0) = insert(Set0, char.det_from_int(to_int(Enum))),
+            SparseBitset,
+            sparse_bitset.init)
 ].
 
 %-----------------------------------------------------------------------------%
@@ -714,26 +783,59 @@ read_from_string(Offset, Result, String, unsafe_promise_unique(String)) :-
 %-----------------------------------------------------------------------------%
 % Some basic non-primitive regexps.
 
+    % int_is_valid_char(Int) = Char.
+    %
+    % True iff Int is Char and is in [0x0..0x10ffff] and not a surrogate
+    % character.
+    %
+:- func int_is_valid_char(int) = char is semidet.
+
+int_is_valid_char(Value) = Char :-
+    char.from_int(Value, Char),
+    not char.is_surrogate(Char).
+
+charset(Start, End) = build_charset(Start, End, sparse_bitset.init) :-
+    expect(Start =< End, $file, $pred,
+        "Start must be less than or equal to End").
+
+charset(char_range(First, Last)) = charset(First, Last).
+
+:- func build_charset(int, int, charset) = charset.
+
+build_charset(First, Last, Charset0) = Charset :-
+    if First =< Last then
+        ( if int_is_valid_char(First) = Char then
+            Charset1 = sparse_bitset.insert(Charset0, Char)
+        else
+            Charset1 = Charset0
+        ),
+        Charset = build_charset(First + 1, Last, Charset1)
+    else
+        Charset = Charset0.
+
+charset_from_ranges(ListOfRanges) =
+    union_list(map(charset, ListOfRanges)).
+
+latin_chars = charset_from_ranges([
+                char_range(0x40, 0x7d),
+                char_range(0xc0, 0xff),
+                char_range(0x100, 0x2ff)
+              ]).
+
+:- func valid_unicode_chars = charset.
+
+valid_unicode_chars = charset(char_range(0x01, 0xffff)).
+
 any(S) = R :-
     ( if S = "" then
         R = null
       else
-        L = string.length(S),
-        C = string.det_index(S, L - 1),
-        R = str_foldr(func(Cx, Rx) = (Cx or Rx), S, re(C), L - 2)
+        R = re(sparse_bitset.list_to_set(string.to_char_list(S)))
     ).
 
-anybut(S0) = R :-
-    S = string.from_char_list(
-            list.filter_map(
-                ( func(X) = C is semidet :-
-                    char.to_int(C, X),
-                    not string.contains_char(S0, C)
-                ),
-                0x01 `..` 0xff
-            )
-        ),
-    R = any(S).
+anybut(S) = R :-
+    ExcludedChars = sparse_bitset.list_to_set(string.to_char_list(S)),
+    R = re(sparse_bitset.difference(valid_unicode_chars, ExcludedChars)).
 
 :- func str_foldr(func(char, T) = T, string, T, int) = T.
 
@@ -745,6 +847,8 @@ str_foldr(Fn, S, X, I) =
 ?(R) = (R or null).
 
 +(R) = (R ++ *(R)).
+
+range(Start, End) = re(charset(char.to_int(Start), char.to_int(End))).
 
 %-----------------------------------------------------------------------------%
 % Some useful single-char regexps.
@@ -763,18 +867,18 @@ digit      = any("0123456789").
 lower      = any("abcdefghijklmnopqrstuvwxyz").
 upper      = any("ABCDEFGHIJKLMNOPQRSTUVWXYZ").
 wspc       = any(" \t\n\r\f\v").
-dot        = anybut("\n").
+dot        = anybut("\r\n").
 alpha      = (lower or upper).
 alphanum   = (alpha or digit).
 identstart = (alpha or ('_')).
 ident      = (alphanum or ('_')).
-nl         = re('\n').
 tab        = re('\t').
 spc        = re(' ').
 
 %-----------------------------------------------------------------------------%
 % Some useful compound regexps.
 
+nl         = (?('\r') ++ '\n').  % matches both Posix and Windows newline.
 nat        = +(digit).
 signed_int = ?("+" or "-") ++ nat.
 real       = signed_int ++ (
