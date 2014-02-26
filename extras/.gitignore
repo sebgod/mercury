@@ -5,6 +5,7 @@ Mercury/**
 *.err
 *.jar
 *.exe
+lib*.dylib
 lib*.dll
 lib*.so
 lib*.a
