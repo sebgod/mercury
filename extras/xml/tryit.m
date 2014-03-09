@@ -32,9 +32,9 @@ main([]) --> [].
 main([File|Files]) -->
     see(File, Res0),		
     ( { Res0 = ok } ->
-	io__read_file_as_string(TextResult),
+	io__read_binary_file_as_bitmap(TextResult),
 	(
-	    { TextResult = error(_, TextErr) },
+	    { TextResult = error(TextErr) },
 	    stderr_stream(StdErr0),
 	    format(StdErr0, "error reading file `%s': %s\n",
 	    	[s(File), s(io__error_message(TextErr))])

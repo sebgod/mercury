@@ -36,7 +36,7 @@
 
 :- interface.
 
-:- import_module string, unicode.
+:- import_module string, bitmap, unicode.
 :- import_module io, list, map, unit, univ.
 
 :- mode pdi == in.
@@ -52,20 +52,20 @@
 	--->	entity(
 		    curr	:: int,
 		    leng	:: int,
-		    text	:: string,
+		    text	:: bitmap,
 		    name	:: entityName
 		).
 
 :- type encoding
 	--->	some [Enc] (enc(Enc) => encoding(Enc)).
 
-:- func mkEntity(string) = entity.
-:- func mkEntity(entityName, string) = entity.
+:- func mkEntity(bitmap) = entity.
+:- func mkEntity(entityName, bitmap) = entity.
 
 :- typeclass encoding(Enc) where [
 	(pred decode(Enc, unicode, entity, entity)),
 	(mode decode(in, out, in, out) is semidet),
-	(pred encode(Enc, list(unicode), string)),
+	(pred encode(Enc, list(unicode), bitmap)),
 	(mode encode(in, in, out) is det)
 ].
 
@@ -89,8 +89,8 @@
 
 :- pred try(parser(T1, T2),
 	    pred(T2, pstate(T2), pstate(T3)),
-	    pred(string, pstate(T1), pstate(T3)),
-	    pred(string, pstate(T1), pstate(T3)),
+	    pred(bitmap, pstate(T1), pstate(T3)),
+	    pred(bitmap, pstate(T1), pstate(T3)),
 	    pstate(T1), pstate(T3)).
 :- mode try(in(parser),
 	    pred(in, pdi, puo) is det,
@@ -145,7 +145,7 @@
 :- pred io(pred(io__state, io__state), pstate(T2), pstate(T2)).
 :- mode io(pred(di, uo) is det, pdi, puo) is det.
 
-:- pred mkString(list(unicode), string, pstate(T1), pstate(T1)).
+:- pred mkString(list(unicode), bitmap, pstate(T1), pstate(T1)).
 :- mode mkString(in, out, pdi, puo) is det.
 
 :- type (A, B) ---> (A, B).
@@ -250,11 +250,11 @@
 	;	error(string)
 	.
 
-mkEntity(Str) = entity(0, Leng, Str, anon) :-
-    length(Str, Leng).
+mkEntity(Bitmap) = entity(0, Leng, Bitmap, anon) :-
+    Leng = det_num_bytes(Bitmap).
 
-mkEntity(Name, Str) = entity(0, Leng, Str, Name) :-
-    length(Str, Leng).
+mkEntity(Name, Bitmap) = entity(0, Leng, Bitmap, Name) :-
+    Leng = det_num_bytes(Bitmap).
 
 mkEncoding(Enc) = 'new enc'(Enc).
 
@@ -463,9 +463,9 @@ io(Pred, PS0, PS) :-
     call(Pred, u(PS0^io), IO),
     PS = PS0^io := IO.
 
-mkString(UniCodes, String, PS, PS) :-
+mkString(UniCodes, Bitmap, PS, PS) :-
     enc(Enc) = PS^encoding,
-    encode(Enc, UniCodes, String).
+    encode(Enc, UniCodes, Bitmap).
 
 (A and B) -->
     actuate(A)			    then (pred(X::in, pdi, puo) is det -->
