@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="NEWSARTICLES">
+    <xs:complexType>
+      <xs:choice>
+        <xs:element maxOccurs="unbounded" ref="ARTICLE" />
+      </xs:choice>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="ARTICLE">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="TITLE" />
+        <xs:element ref="BODY" />
+      </xs:sequence>
+      <xs:attribute name="DATE" />
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="TITLE">
+    <xs:complexType mixed="true" />
+  </xs:element>
+  <xs:element name="BODY">
+    <xs:complexType mixed="true" />
+  </xs:element>
+</xs:schema>

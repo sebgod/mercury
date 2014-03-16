@@ -1,0 +1,6 @@
+W3ORG="http://www.w3.org"
+wget -N "${W3ORG}/2001/datatypes.dtd"
+wget -N "${W3ORG}/2001/XMLSchema.dtd"
+wget -N "${W3ORG}/2001/XMLSchema.xsd"
+wget -N "${W3ORG}/2001/datatypes.dtd"
+wget -N "${W3ORG}/2001/xml.xsd"

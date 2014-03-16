@@ -1,0 +1,228 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  DTD for XML Schemas: Part 2: Datatypes
+  $Id: datatypes.dtd,v 1.23 2001/03/16 17:36:30 ht Exp $
+  Note this DTD is NOT normative, or even definitive. - - the
+  prose copy in the datatypes REC is the definitive version
+  (which shouldn't differ from this one except for this comment
+  and entity expansions, but just in case)
+-->
+<!--
+  This DTD cannot be used on its own, it is intended
+  only for incorporation in XMLSchema.dtd, q.v.
+-->
+<!-- Define all the element names, with optional prefix -->
+<!--
+  Customisation entities for the ATTLIST of each element
+  type. Define one of these if your schema takes advantage
+  of the anyAttribute='##other' in the schema for schemas
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified" targetNamespace="http://www.w3.org/2001/XMLSchema" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:import namespace="http://www.w3.org/XML/1998/namespace" schemaLocation="xml.xsd"/>
+  <!--
+    Define some entities for informative use as attribute
+    types
+  -->
+  <xs:simpleType name="URIref">
+    <xs:restriction base="xs:string"/>
+  </xs:simpleType>
+  <xs:simpleType name="XPathExpr">
+    <xs:restriction base="xs:string"/>
+  </xs:simpleType>
+  <xs:simpleType name="QName">
+    <xs:restriction base="xs:NMTOKEN"/>
+  </xs:simpleType>
+  <xs:simpleType name="QNames">
+    <xs:restriction base="xs:NMTOKENS"/>
+  </xs:simpleType>
+  <xs:simpleType name="NCName">
+    <xs:restriction base="xs:NMTOKEN"/>
+  </xs:simpleType>
+  <xs:simpleType name="nonNegativeInteger">
+    <xs:restriction base="xs:NMTOKEN"/>
+  </xs:simpleType>
+  <xs:simpleType name="boolean">
+    <xs:restriction base="xs:token">
+      <xs:enumeration value="true"/>
+      <xs:enumeration value="false"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="simpleDerivationSet">
+    <xs:restriction base="xs:string"/>
+  </xs:simpleType>
+  <!-- #all or space-separated list drawn from derivationChoice -->
+  <!--
+    Note that the use of 'facet' below is less restrictive
+    than is really intended:  There should in fact be no
+    more than one of each of minInclusive, minExclusive,
+    maxInclusive, maxExclusive, totalDigits, fractionDigits,
+    length, maxLength, minLength within datatype,
+    and the min- and max- variants of Inclusive and Exclusive
+    are mutually exclusive. On the other hand,  pattern and
+    enumeration may repeat.
+  -->
+  <xs:element name="minBound" abstract="true" substitutionGroup="xs:bounds"/>
+  <xs:element name="maxBound" abstract="true" substitutionGroup="xs:bounds"/>
+  <xs:element name="bounds" abstract="true" substitutionGroup="xs:ordered"/>
+  <xs:element name="numeric" abstract="true" substitutionGroup="xs:ordered"/>
+  <xs:element name="ordered" abstract="true" substitutionGroup="xs:facet">
+    <xs:complexType>
+      <xs:complexContent>
+        <xs:extension base="xs:facetModel">
+          <xs:attributeGroup ref="xs:facetAttr"/>
+          <xs:attributeGroup ref="xs:fixedAttr"/>
+        </xs:extension>
+      </xs:complexContent>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="unordered" abstract="true" substitutionGroup="xs:facet"/>
+  <xs:element name="facet" abstract="true"/>
+  <xs:attributeGroup name="facetAttr">
+    <xs:attribute name="value" use="required"/>
+    <xs:attribute name="id" type="xs:ID"/>
+  </xs:attributeGroup>
+  <xs:attributeGroup name="fixedAttr">
+    <xs:attribute name="fixed" type="xs:boolean"/>
+  </xs:attributeGroup>
+  <xs:complexType name="facetModel">
+    <xs:sequence>
+      <xs:element minOccurs="0" ref="xs:annotation"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:element name="simpleType">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element minOccurs="0" ref="xs:annotation"/>
+        <xs:choice>
+          <xs:element ref="xs:restriction"/>
+          <xs:element ref="xs:list"/>
+          <xs:element ref="xs:union"/>
+        </xs:choice>
+      </xs:sequence>
+      <xs:attribute name="name" type="xs:NCName"/>
+      <xs:attribute name="final" type="xs:simpleDerivationSet"/>
+      <xs:attribute name="id" type="xs:ID"/>
+    </xs:complexType>
+  </xs:element>
+  <!-- name is required at top level -->
+  <xs:element name="restriction">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element minOccurs="0" ref="xs:annotation"/>
+        <xs:choice>
+          <xs:group ref="xs:restriction1"/>
+          <xs:sequence>
+            <xs:element minOccurs="0" ref="xs:simpleType"/>
+            <xs:element minOccurs="0" maxOccurs="unbounded" ref="xs:facet"/>
+          </xs:sequence>
+        </xs:choice>
+        <xs:group ref="xs:attrDecls"/>
+      </xs:sequence>
+      <xs:attribute name="base" type="xs:QName"/>
+      <xs:attribute name="id" type="xs:ID"/>
+    </xs:complexType>
+  </xs:element>
+  <!--
+    base and simpleType child are mutually exclusive,
+    one is required.
+    
+    restriction is shared between simpleType and
+    simpleContent and complexContent (in XMLSchema.xsd).
+    restriction1 is for the latter cases, when this
+    is restricting a complex type, as is attrDecls.
+  -->
+  <xs:element name="list">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element minOccurs="0" ref="xs:annotation"/>
+        <xs:element minOccurs="0" ref="xs:simpleType"/>
+      </xs:sequence>
+      <xs:attribute name="itemType" type="xs:QName"/>
+      <xs:attribute name="id" type="xs:ID"/>
+    </xs:complexType>
+  </xs:element>
+  <!--
+    itemType and simpleType child are mutually exclusive,
+    one is required
+  -->
+  <xs:element name="union">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element minOccurs="0" ref="xs:annotation"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="xs:simpleType"/>
+      </xs:sequence>
+      <xs:attribute name="id" type="xs:ID"/>
+      <xs:attribute name="memberTypes" type="xs:QNames"/>
+    </xs:complexType>
+  </xs:element>
+  <!--
+    At least one item in memberTypes or one simpleType
+    child is required
+  -->
+  <xs:element name="maxExclusive" substitutionGroup="xs:maxBound"/>
+  <xs:element name="minExclusive" substitutionGroup="xs:minBound"/>
+  <xs:element name="maxInclusive" substitutionGroup="xs:maxBound"/>
+  <xs:element name="minInclusive" substitutionGroup="xs:minBound"/>
+  <xs:element name="totalDigits" substitutionGroup="xs:numeric"/>
+  <xs:element name="fractionDigits" substitutionGroup="xs:numeric"/>
+  <xs:element name="length" substitutionGroup="xs:unordered">
+    <xs:complexType>
+      <xs:complexContent>
+        <xs:extension base="xs:facetModel">
+          <xs:attributeGroup ref="xs:facetAttr"/>
+          <xs:attributeGroup ref="xs:fixedAttr"/>
+        </xs:extension>
+      </xs:complexContent>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="minLength" substitutionGroup="xs:unordered">
+    <xs:complexType>
+      <xs:complexContent>
+        <xs:extension base="xs:facetModel">
+          <xs:attributeGroup ref="xs:facetAttr"/>
+          <xs:attributeGroup ref="xs:fixedAttr"/>
+        </xs:extension>
+      </xs:complexContent>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="maxLength" substitutionGroup="xs:unordered">
+    <xs:complexType>
+      <xs:complexContent>
+        <xs:extension base="xs:facetModel">
+          <xs:attributeGroup ref="xs:facetAttr"/>
+          <xs:attributeGroup ref="xs:fixedAttr"/>
+        </xs:extension>
+      </xs:complexContent>
+    </xs:complexType>
+  </xs:element>
+  <!-- This one can be repeated -->
+  <xs:element name="enumeration" substitutionGroup="xs:unordered">
+    <xs:complexType>
+      <xs:complexContent>
+        <xs:extension base="xs:facetModel">
+          <xs:attributeGroup ref="xs:facetAttr"/>
+        </xs:extension>
+      </xs:complexContent>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="whiteSpace" substitutionGroup="xs:unordered">
+    <xs:complexType>
+      <xs:complexContent>
+        <xs:extension base="xs:facetModel">
+          <xs:attributeGroup ref="xs:facetAttr"/>
+          <xs:attributeGroup ref="xs:fixedAttr"/>
+        </xs:extension>
+      </xs:complexContent>
+    </xs:complexType>
+  </xs:element>
+  <!-- This one can be repeated -->
+  <xs:element name="pattern" substitutionGroup="xs:unordered">
+    <xs:complexType>
+      <xs:complexContent>
+        <xs:extension base="xs:facetModel">
+          <xs:attributeGroup ref="xs:facetAttr"/>
+        </xs:extension>
+      </xs:complexContent>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>
