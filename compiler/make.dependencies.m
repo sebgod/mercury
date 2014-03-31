@@ -584,6 +584,7 @@ base_compiled_code_dependencies(TrackFlags) = Deps :-
     Deps = combine_deps_list([
         module_target_source `of` self,
         fact_table_files `files_of` self,
+        foreign_include_files `files_of` self,
         map_find_module_deps(imports, self),
         Deps0
     ]).
@@ -1107,6 +1108,47 @@ fact_table_files(Globals, ModuleIndex, Success, Files, !Info, !IO) :-
 
 %-----------------------------------------------------------------------------%
 
+:- pred foreign_include_files(globals::in, module_index::in,
+    bool::out, set(dependency_file)::out,
+    make_info::in, make_info::out, io::di, io::uo) is det.
+
+foreign_include_files(Globals, ModuleIndex, Success, Files, !Info, !IO) :-
+    globals.get_backend_foreign_languages(Globals, Languages),
+    module_index_to_name(!.Info, ModuleIndex, ModuleName),
+    get_module_dependencies(Globals, ModuleName, MaybeImports, !Info, !IO),
+    (
+        MaybeImports = yes(Imports),
+        Success = yes,
+        SourceFileName = Imports ^ mai_source_file_name,
+        ForeignIncludeFiles = Imports ^ mai_foreign_include_files,
+        FilesList = get_foreign_include_files(set.from_list(Languages),
+            SourceFileName, ForeignIncludeFiles),
+        Files = set.from_list(FilesList)
+    ;
+        MaybeImports = no,
+        Success = no,
+        Files = set.init
+    ).
+
+:- func get_foreign_include_files(set(foreign_language), file_name,
+    foreign_include_file_info_list) = list(dependency_file).
+
+get_foreign_include_files(Languages, SourceFileName, ForeignIncludes)
+        = Files :-
+    list.filter_map(get_foreign_include_files_2(Languages, SourceFileName),
+        ForeignIncludes, Files).
+
+:- pred get_foreign_include_files_2(set(foreign_language)::in, file_name::in,
+    foreign_include_file_info::in, dependency_file::out) is semidet.
+
+get_foreign_include_files_2(Languages, SourceFileName, ForeignInclude, File) :-
+    ForeignInclude = foreign_include_file_info(Language, IncludeFileName),
+    set.member(Language, Languages),
+    make_include_file_path(SourceFileName, IncludeFileName, IncludePath),
+    File = dep_file(IncludePath, no).
+
+%-----------------------------------------------------------------------------%
+
 :- type transitive_dependencies_root
     --->    transitive_dependencies_root(
                 module_index,
@@ -1494,7 +1536,7 @@ make_write_dependency_file_and_timestamp_list([Head | Tail], !IO) :-
 
 dependency_status(Globals, Dep, Status, !Info, !IO) :-
     (
-        Dep = dep_file(FileName, _),
+        Dep = dep_file(_FileName, _),
         DepStatusMap = !.Info ^ dependency_status,
         ( version_hash_table.search(DepStatusMap, Dep, StatusPrime) ->
             Status = StatusPrime
@@ -1506,9 +1548,7 @@ dependency_status(Globals, Dep, Status, !Info, !IO) :-
             ;
                 MaybeTimestamp = error(Error),
                 Status = deps_status_error,
-                io.write_string("** Error: file `", !IO),
-                io.write_string(FileName, !IO),
-                io.write_string("' not found: ", !IO),
+                io.write_string("** Error: ", !IO),
                 io.write_string(Error, !IO),
                 io.nl(!IO)
             ),

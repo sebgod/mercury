@@ -106,7 +106,8 @@ write_dependency_file(Globals, Module, AllDepsSet, MaybeTransOptDeps, !IO) :-
     Module = module_and_imports(SourceFileName, SourceFileModuleName,
         ModuleName, ParentDeps, IntDeps, ImplDeps, IndirectDeps,
         _Children, InclDeps, NestedDeps, FactDeps0,
-        ContainsForeignCode, ForeignImports0, _ContainsForeignExport,
+        ContainsForeignCode, ForeignImports0, ForeignIncludeFiles,
+        _ContainsForeignExport,
         Items, _Specs, _Error, _Timestamps, _HasMain, _Dir),
 
     globals.lookup_bool_option(Globals, verbose, Verbose),
@@ -271,6 +272,12 @@ write_dependency_file(Globals, Module, AllDepsSet, MaybeTransOptDeps, !IO) :-
             ),
             list.foldl(Write, NestedExts, !IO)
         ),
+
+        % This is conservative: a target file for foreign language A does not
+        % does not truly depend on a file included for foreign language B.
+        write_foreign_include_file_dependencies_list(DepStream,
+            SourceFileName, ForeignIncludeFiles, !IO),
+
         (
             FactDeps = [_ | _],
             io.write_strings(DepStream, [
@@ -518,7 +525,7 @@ write_dependency_file(Globals, Module, AllDepsSet, MaybeTransOptDeps, !IO) :-
         ;
             ContainsForeignCode = contains_foreign_code_unknown,
             get_item_list_foreign_code(Globals, cord.list(Items), LangSet,
-                ForeignImports1, _),
+                ForeignImports1, _, _),
             % If we're generating the `.dep' file, ForeignImports0 will contain
             % a conservative approximation to the set of foreign imports
             % needed which will include imports required by imported modules.
@@ -855,6 +862,25 @@ write_dll_dependency(Globals, Module, Prefix, DepStream, !IO) :-
     io.write_string(DepStream, " \\\n\t", !IO),
     io.write_string(DepStream, Prefix, !IO),
     io.write_string(DepStream, FileName, !IO).
+
+:- pred write_foreign_include_file_dependencies_list(io.output_stream::in,
+    file_name::in, foreign_include_file_info_list::in, io::di, io::uo) is det.
+
+write_foreign_include_file_dependencies_list(DepStream, SourceFileName,
+        IncludeFiles, !IO) :-
+    list.foldl(
+        write_foreign_include_file_dependency(DepStream, SourceFileName),
+        IncludeFiles, !IO).
+
+:- pred write_foreign_include_file_dependency(io.output_stream::in,
+    file_name::in, foreign_include_file_info::in, io::di, io::uo) is det.
+
+write_foreign_include_file_dependency(DepStream, SourceFileName,
+        IncludeFile, !IO) :-
+    IncludeFile = foreign_include_file_info(_Lang, IncludeFileName),
+    make_include_file_path(SourceFileName, IncludeFileName, IncludePath),
+    io.write_string(DepStream, " \\\n\t", !IO),
+    io.write_string(DepStream, IncludePath, !IO).
 
 :- pred write_fact_table_dependencies_list(globals::in, module_name::in,
     list(file_name)::in, string::in, io.output_stream::in,
