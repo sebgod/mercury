@@ -1,2 +1,0 @@
-language: c
-install: aclocal -I m4 && autoconf && ./configure --enable-minimal-install && make
