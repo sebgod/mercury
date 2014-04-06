@@ -1,2 +1,2 @@
 language: c
-install: aclocal -I m4 && ./configure --enable-minimal-install && make
+install: aclocal -I m4 && autoconf && ./configure --enable-minimal-install && make
