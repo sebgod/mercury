@@ -1,7 +1,7 @@
 Mercury
 =======
 
-This is the Melbourne implementation of the Mercury logic programming system.
+This is the Melbourne implementation of the [Mercury](http://www.mercurylang.org/) logic programming system.
 
 Instructions
 ------------
@@ -30,4 +30,4 @@ Instructions
  * [Windows](README.MS-Windows)
   * Using the [Visual C compiler](README.MS-VisualC)
   * Using the [MinGW gcc compiler](README.MinGW)
-  * Using the [Cygwin](README.Gygwin) environment
+  * Using the [Cygwin](README.Cygwin) environment
