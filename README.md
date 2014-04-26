@@ -3,20 +3,19 @@ Mercury
 
 This is the Melbourne implementation of the [Mercury](http://www.mercurylang.org/) logic programming system.
 
-Instructions
-------------
+## Instructions
 
  * Low-level backend compilers
   * [.Net IL](README.DotNet)
   * [Clang](README.clang)
   * [lcc](README.lcc)
  * High-level backend targets
-  * [C#](README.CSharp) 
+  * [C#](README.CSharp)
   * [Erlang](README.Erlang)
-  * [Java](README.Java) 
+  * [Java](README.Java)
  * Unix
   * [FreeBSD](README.FreeBSD)
-  * [AIX](README.AIX) 
+  * [AIX](README.AIX)
   * [HP-UX](README.HPUX)
   * [Solaris](README.Solaris)
   * [IRIX-5](README.IRIX-5)
