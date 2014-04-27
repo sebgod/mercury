@@ -1,7 +1,7 @@
 Mercury
 =======
 
-This is the Melbourne implementation of the [Mercury](http://www.mercurylang.org/) logic programming system.
+[Mercury](http://www.mercurylang.org/) is a logic/functional programming language which combines the clarity and the expressiveness of declarative programming with advanced static analysis and error detection features.
 
 ## Instructions
 
