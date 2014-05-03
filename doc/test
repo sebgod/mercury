@@ -1,0 +1,1 @@
+( mmake realclean ) && ( cd .. && mmake doc XSLTPROC=xsltproc )
