@@ -327,19 +327,32 @@ library-chapters.texi_pp: ../VERSION $(LIBRARY_DIR)/[a-z]*.m
 				file="`basename $$filename .m`"; 	\
 				echo "@node $$file"; 			\
 				echo "@chapter $$file"; 		\
-				echo "@example"; 			\
-				sed -n -e '/:- implementation/q' 	\
-					-e 's/^%----*----% *$$/%--------------------------------------------------%/' 						\
-					-e 's/@/@@/g' 			\
-					-e 's/{/@{/g' 			\
-					-e 's/}/@}/g' 			\
-					-e 'p' 				\
-					"$$filename"; 			\
-				echo "@end example"; 			\
-				echo ""; 				\
-				;;					\
-		esac;							\
+				if [ -z $(XSLTPROC) ]; then			\
+					echo "@example"; 			\
+					sed -n -e '/:- implementation/q' 	\
+						-e 's/^%----*----% *$$/%--------------------------------------------------%/' \
+						-e 's/@/@@/g' 			\
+						-e 's/{/@{/g' 			\
+						-e 's/}/@}/g' 			\
+						-e 'p' 				\
+						"$$filename"; 			\
+					echo "@end example"; 			\
+				else						\
+					( cd $(LIBRARY_DIR) && mmc -x `basename $$filename`); \
+					$(XSLTPROC) --stringparam module "$$file" library.xslt $(LIBRARY_DIR)/$$file.xml | \
+						sed -n -e 's/^[ \t]\+//g'	\
+						       -e 's/^%[ \t]//g' 	\
+						       -e '/^vim: /d'		\
+						       -e '/^%--*--% */d'	\
+						       -e 's/^%[ \t]*//g'	\
+						       -e '/^File: /d'		\
+						       -e 'p';		 	\
+				fi;					 	\
+				echo ""; 					\
+				;;						\
+		esac;								\
 	done > library-chapters.texi_pp
+
 
 library.dvi_log library_toc.html library_1.html mercury_library.info \
 		mercury_library.html mercury_library/index.html \
