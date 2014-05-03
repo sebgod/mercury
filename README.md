@@ -25,7 +25,7 @@ Mercury
   * [Alpha](README.Linux-Alpha)
   * [PPC](README.Linux-PPC)
   * [m68k](README.Linux-m68k)
- * Cross compililation
+ * Cross compilation
   * [MinGW](README.MinGW-cross)
  * [Windows](README.MS-Windows)
   * Using the [Visual C compiler](README.MS-VisualC)
