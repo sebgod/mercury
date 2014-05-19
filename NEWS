@@ -15,8 +15,12 @@ Changes to the Mercury standard library:
 * io.print and string_writer.print now print arbitrary precision integers
   in their decimal form instead of printing their underlying representation.
 
-* We have added a module for discrete interval encoding trees,
-  which are a highly efficient set implementation for fat sets.
+* We have added a module for discrete interval encoding trees, which are a
+  highly efficient set implementation for fat sets.  This module is a
+  contribution from Yes Logic Pty. Ltd.
+
+* We have added a module that implements barriers for concurrent
+  programming.  This module is a contribution from Mission Critical IT.
 
 Changes to the extras distribution:
 
@@ -31,18 +35,23 @@ This is a bug-fix release.
 
 * The function string.string/1 and related functions now handle version
   arrays properly.
+* Fix resource leaks in dir fold predicates.
 * The mfilterjavac program is now generated with the correct file extension
   on Windows.
 * A problem that caused compilation of the Boehm GC to fail on 64-bit
   openSUSE 13.1 systems has been fixed.  (Github issue #14)
 * The documentation now builds correctly on Cygwin systems.
 * The script configure_mingw_cross now supports 64-bit Windows targets.
+* We have added workarounds for problems with (arguably broken)
+  system headers on MinGW and MinGW64 systems.
+* The MinGW port now builds in the absence of POSIX threads library.
 
 Changes to the Mercury compiler:
 
 * The compiler now supports stripping of executables in a separate
-  post-link step.  A new option, --strip-executable-command, is used
-  to control this.  
+  post-link step.  The new options, --strip-executable-command,
+  --strip-executable-shared-flags and --strip-executable-static-flags
+  are used to control this.  
   (This is now the default on Mac OS X systems.)
 
 

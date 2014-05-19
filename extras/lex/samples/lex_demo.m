@@ -6,7 +6,7 @@
 %
 % Copyright (C) 2001-2002 The University of Melbourne
 % Copyright (C) 2001 The Rationalizer Intelligent Software AG
-%   The changes made by Rationalizer are contributed under the terms 
+%   The changes made by Rationalizer are contributed under the terms
 %   of the GNU General Public License - see the file COPYING in the
 %   Mercury Distribution.
 %
@@ -33,6 +33,7 @@
 :- import_module float.
 :- import_module int.
 :- import_module list.
+:- import_module maybe.
 :- import_module string.
 
 %-----------------------------------------------------------------------------%
@@ -46,34 +47,72 @@ I recognise the following words:
 ""and"", ""then"", ""the"", ""it"", ""them"", ""to"", ""on"".
 I also recognise Unicode characters:
 ""我"", ""会"", ""说"", ""中文""
-I also recognise Mercury-style comments, integers and floating point
-numbers, and a variety of punctuation symbols.
+I also recognise Mercury-style and C++ style comments comments, integers
+and floating point numbers, and a variety of punctuation symbols.
 
 Try me...
 
 ", !IO),
 
-    Lexer  = lex.init(lexemes, lex.read_from_stdin, ignore(space)),
-    State0 = lex.start(Lexer, !.IO),
-    tokenise_stdin(State0, State),
-    !:IO = lex.stop(State).
+    prompt_loop(!IO).
+
+:- pred prompt_loop(io::di, io::uo) is det.
+
+prompt_loop(!IO) :-
+    io.write_string("> ", !IO),
+    io.read_line_as_string(Result, !IO),
+    (
+        Result = ok(Input0),
+        Lexer = lex.init(lexemes, lex.read_from_string, ignore(space)),
+        some [!State] (
+            copy(Input0, Input),
+            !:State = lex.start(Lexer, Input),
+            tokenise(MaybeError, [], Tokens, !State),
+            _ = lex.stop(!.State),
+            (
+                MaybeError = yes(Error),
+                io.format("Error on line %d: %s\n",
+                    [i(Error ^ re_line), s(Error ^ re_message)], !IO)
+            ;
+                MaybeError = no
+            ),
+            io.format("Tokens: %s\n", [s(string(Tokens))], !IO)
+        ),
+        prompt_loop(!IO)
+    ;
+        Result = eof
+        % Just exit
+    ;
+        Result = error(Error),
+        io.format(io.stdout_stream, "Error while reading input: %s",
+            [s(error_message(Error))], !IO),
+        io.set_exit_status(1, !IO)
+    ).
 
 %-----------------------------------------------------------------------------%
 
-:- pred tokenise_stdin(lexer_state(token, io)::di, lexer_state(token, io)::uo)
-    is det.
+:- type read_error
+    --->    read_error(
+                re_message      :: string,
+                re_line         :: int
+            ).
 
-tokenise_stdin(!LS) :-
+:- pred tokenise(maybe(read_error)::out, list(token)::in, list(token)::out,
+    lexer_state(token, string)::di, lexer_state(token, string)::uo) is det.
+
+tokenise(MaybeError, !Tokens, !LS) :-
     lex.read(Result, !LS),
-    lex.manipulate_source(io.print(Result), !LS),
-    lex.manipulate_source(io.nl, !LS),
     (
-        Result = ok(_),
-        tokenise_stdin(!LS)
+        Result = ok(Token),
+        !:Tokens = [Token | !.Tokens],
+        tokenise(MaybeError, !Tokens, !LS)
     ;
-        ( Result = eof
-        ; Result = error(_, _)
-        )
+        Result = eof,
+        reverse(!Tokens),
+        MaybeError = no
+    ;
+        Result = error(Message, Line),
+        MaybeError = yes(read_error(Message, Line))
     ).
 
 %-----------------------------------------------------------------------------%
@@ -97,6 +136,7 @@ tokenise_stdin(!LS) :-
 lexemes = [
 
     ( "%" ++ junk       -> (func(Match) = comment(Match)) ),
+    ( '/'*2 ++ junk     -> (func(Match) = comment(Match)) ),
     ( signed_int        -> (func(Match) = integer(string.det_to_int(Match))) ),
     ( real              -> (func(Match) = real(string.det_to_float(Match))) ),
 
@@ -117,7 +157,7 @@ lexemes = [
       "then"            -> (func(Match) = conj(Match)) ),
 
         % `\/' is a synonym for `or'.  Tell us which you prefer...
-        % 
+        %
     ( "the" \/
       "it" \/
       "them" \/
