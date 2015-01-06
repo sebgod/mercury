@@ -1,1 +1,2 @@
 MCFLAGS-mercury_tcltk=--no-warn-nothing-exported
+MCFLAGS-mtcltk=--cflag -DUSE_INTERP_RESULT

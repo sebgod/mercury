@@ -121,8 +121,11 @@
 */
 
 :- pragma foreign_code("C", "
+/* XXX: MinGW32 does not define int matherr(void) */
+#ifndef MR_WIN32
     extern int matherr(void);
     int *tclDummyMathPtr = (int *) matherr;
+#endif
 ").
 
 :- pragma foreign_decl("C", "
