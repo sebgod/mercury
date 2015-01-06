@@ -1,0 +1,14 @@
+To build gears on
+
+MinGW32
+=======
+
+1. Read the instructions on
+   http://www.transmissionzero.co.uk/software/freeglut-devel/
+   or directly download from
+   http://files.transmissionzero.co.uk/software/development/GLUT/freeglut-MinGW.zip
+   and move the files to your MinGW32 directory
+
+2. Building with mmc
+   This assumes that mercury_opengl and mercury_glut libraries are already installed
+   mmc --make gears --mercury-library mercury_opengl --mercury-library mercury_glut -lopengl32 -lfreeglut -lglu32
