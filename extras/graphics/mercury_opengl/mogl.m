@@ -1211,6 +1211,16 @@
     #else
         #include <GL/gl.h>
     #endif
+
+    /* Under Windows, we do not define OpenGL 1.2 & 1.3 functionality, since
+       it is treated as extensions (defined in glext.h),
+       needed for:
+        GL_PACK_IMAGE_HEIGHT, GL_PACK_SKIP_IMAGES,
+        GL_UNPACK_IMAGE_HEIGHT, GL_UNPACK_SKIP_IMAGES
+    */
+    #ifdef MR_WIN32
+        #include <GL/glext.h>
+    #endif
 ").
 
 %------------------------------------------------------------------------------%
