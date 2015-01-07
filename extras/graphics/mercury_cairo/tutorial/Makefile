@@ -20,11 +20,18 @@ PROGS=\
 	tips_letter
 
 .PHONY: all
-all:
-	$(foreach PROG,$(PROGS),$(MMC) --make $(PROG) \
-		--cflags $(CAIRO_CFLAGS) --ld-flags $(CAIRO_LDFLAGS);)
+all: $(PROGS)
+
+%: %.m
+	$(MMC) --make $@ --ml mercury_cairo --cflags $(CAIRO_CFLAGS) $(CAIRO_LDFLAGS)
+
+.PHONY: test
+
+test: all
+	$(foreach PROG,$(PROGS),./$(PROG);)
 
 .PHONY: realclean
 realclean:
 	$(foreach PROG,$(PROGS),$(MMC) --make $(PROG).realclean;)
+	/bin/rm -f *.png
 	/bin/rm -rf Mercury
