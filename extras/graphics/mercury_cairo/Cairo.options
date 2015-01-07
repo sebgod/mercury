@@ -9,17 +9,17 @@
 
 # Where are we going to install the Mercury cairo binding?
 #
-INSTALL_PREFIX=.
 
 # What flags do we need to pass to the C compiler in order to compile
 # against cairo?  
 # Use "pkg-config --cflags cairo" to determine this and substitute the result
 # as the value of CAIRO_CFLAGS.
 #
-CAIRO_CFLAGS="-I/opt/local/include/cairo -I/opt/local/include/pixman-1 -I/opt/local/include -I/opt/local/include/freetype2 -I/opt/local/include/libpng12"
+
+CAIRO_CFLAGS="-mms-bitfields -IC:/MinGW/include/cairo -IC:/MinGW/include/glib-2.0 -IC:/MinGW/lib/glib-2.0/include -IC:/MinGW/include -IC:/MinGW/include/freetype2 -IC:/MinGW/include -IC:/MinGW/include/libpng15"
 
 # What flags do we need to pass to the linker in order to link against cairo?
 # Use "pkg-config --libs cairo" here and substitute the result as the value
 # of CAIRO_LDFLAGS.
 #
-CAIRO_LDFLAGS="-L/opt/local/lib -lcairo -lpixman-1 -lfontconfig -lexpat -liconv -lfreetype -lpng12 -lz -lXrender -lX11 -lxcb -lXau -lXdmcp"
+CAIRO_LDFLAGS="-LC:/MinGW/lib -lcairo"
