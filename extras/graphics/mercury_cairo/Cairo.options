@@ -19,7 +19,7 @@
 CAIRO_CFLAGS="-mms-bitfields -IC:/MinGW/include/cairo -IC:/MinGW/include/glib-2.0 -IC:/MinGW/lib/glib-2.0/include -IC:/MinGW/include -IC:/MinGW/include/freetype2 -IC:/MinGW/include -IC:/MinGW/include/libpng15"
 
 # What flags do we need to pass to the linker in order to link against cairo?
-# Use "pkg-config --libs cairo" here and substitute the result as the value
+# Use "pkg-config --libs-only-l cairo" here and substitute the result as the value
 # of CAIRO_LDFLAGS.
 #
-CAIRO_LDFLAGS="-LC:/MinGW/lib -lcairo"
+CAIRO_LDFLAGS="-lcairo"

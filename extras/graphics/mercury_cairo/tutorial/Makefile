@@ -7,25 +7,24 @@ include ../Cairo.options
 MMC=mmc
 
 PROGS=\
-	fill			\
-	mask			\
-	paint			\
-	path_close		\
+	fill                \
+	mask                \
+	paint        	    \
+	path_close		    \
 	setsourcegradient	\
 	setsourcergba		\
-	showtext		\
-	stroke			\
-	textextents		\
-	tips_ellipse		\
+	showtext            \
+	stroke              \
+	textextents         \
+	tips_ellipse        \
 	tips_letter
 
 .PHONY: all
 all:
-	$(MMC) --make $(PROGS)
+	$(foreach PROG,$(PROGS),$(MMC) --make $(PROG) \
+		--cflags $(CAIRO_CFLAGS) --ld-flags $(CAIRO_LDFLAGS);)
 
 .PHONY: realclean
 realclean:
-	for prog in $(PROGS); do \
-		$(MMC) --make $$prog.realclean; \
-	done
+	$(foreach PROG,$(PROGS),$(MMC) --make $(PROG).realclean;)
 	/bin/rm -rf Mercury
