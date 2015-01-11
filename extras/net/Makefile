@@ -8,17 +8,21 @@
 
 MMC=mmc
 MTAGS=mtags
-MCFLAGS=-O3 --intermodule-optimization --use-grade-subdirs --grade hlc.gc
+GRADE=hlc.gc
+MCFLAGS := -O3 --intermodule-optimization --use-grade-subdirs --grade $(GRADE)
+ifdef WINDIR
+    MLIBS := -lws2_32
+endif
 
 MERCURY_FILES=$(wildcard *.m)
 
 all: libnet.so echo test_lookups
 
 libnet.so: $(MERCURY_FILES)
-	$(MMC) $(MCFLAGS) --make libnet
+	$(MMC) $(MCFLAGS) --make libnet $(MLIBS)
 
 echo: $(MERCURY_FILES)
-	$(MMC) $(MCFLAGS) --make echo
+	$(MMC) $(MCFLAGS) --make echo $(MLIBS)
 
 test_lookups: $(MERCURY_FILES)
 	$(MMC) $(MCFLAGS) --make test_lookups
