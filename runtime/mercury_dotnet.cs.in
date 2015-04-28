@@ -1013,11 +1013,12 @@ public class ThreadLocalMutables
 
 public class Constants
 {
-    public static readonly int MR_PREDICATE     = 0;
-    public static readonly int MR_FUNCTION      = 1;
+    public static readonly int MR_PREDICATE       = 0;
+    public static readonly int MR_FUNCTION        = 1;
 
-    public static readonly string MR_VERSION    = "@VERSION@";
-    public static readonly string MR_FULLARCH   = "@FULLARCH@";
+    public static readonly string MR_VERSION      = "@VERSION@";
+    public static readonly string MR_FULLARCH     = "@FULLARCH@";
+    public static readonly string MR_GIT_REVISION = "@GIT_REVISION@";
 }
 
 /*---------------------------------------------------------------------------*/

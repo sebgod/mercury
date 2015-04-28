@@ -469,6 +469,10 @@
 
 #undef MR_USE_DLLS
 
+// Which git revision is used to build Mercury?
+
+#define MR_GIT_REVISION "unknown"
+
 // For SPARC systems, does `as' not allow `.type' in inline asm?
 // (True for SunOS 4.x.)
 

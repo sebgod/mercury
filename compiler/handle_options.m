@@ -2430,9 +2430,10 @@ usage_errors(Globals, Specs, !IO) :-
     write_error_specs(Specs, Globals, 0, _NumWarnings, 0, _NumErrors, !IO).
 
 display_compiler_version(!IO) :-
-    library.version(Version, Fullarch),
+    library.version(Version, Fullarch, GitRevision),
     io.write_strings([
         "Mercury Compiler, version ", Version, ", on ", Fullarch, "\n",
+        "Git revision ", GitRevision, "\n",
         "Copyright (C) 1993-2012 The University of Melbourne\n",
         "Copyright (C) 2013-2016 The Mercury team\n"
     ], !IO).

@@ -19,6 +19,7 @@
 
 -define(MR_VERSION, "@VERSION@").
 -define(MR_FULLARCH, "@FULLARCH@").
+-define(MR_GIT_REVISION, "@GIT_REVISION@").
 
 -endif.
 

@@ -13,4 +13,5 @@ package jmercury.runtime;
 public class Constants {
 	public static final java.lang.String MR_VERSION = "@VERSION@";
 	public static final java.lang.String MR_FULLARCH = "@FULLARCH@";
+	public static final java.lang.String MR_GIT_REVISION = "@GIT_REVISION@";
 }

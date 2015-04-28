@@ -21,6 +21,10 @@
     %
 :- pred library.version(string::out, string::out) is det.
 
+    % version(VersionString, FullarchString, GitRevision)
+    %
+:- pred library.version(string::out, string::out, string::out) is det.
+
 :- implementation.
 
 % Everything below here is not intended to be part of the public interface,
@@ -178,52 +182,62 @@
 ").
 
 % library.version must be implemented using pragma foreign_proc,
-% so we can get at the MR_VERSION and MR_FULLARCH configuration
-% parameters.  We can't just generate library.m from library.m.in
-% at configuration time, because that would cause bootstrapping problems --
-% we might not have a Mercury compiler around to compile library.m with.
+% so we can get at the MR_VERSION, MR_FULLARCH and MR_GIT_REVISION
+% configuration parameters.  We can't just generate library.m from
+% library.m.in at configuration time, because that would cause
+% bootstrapping problems -- we might not have a Mercury compiler
+% around to compile library.m with.
 
 % We can't allow library.version to inlined into other modules.  The Erlang
 % definition depends on erlang_conf.hrl, which will only be included by this
 % module and not installed.
 :- pragma no_inline(library.version/2).
+:- pragma no_inline(library.version/3).
+
+library.version(Version::out, Fullarch::out) :-
+    library.version(Version, Fullarch, _GitRevision).
 
 :- pragma foreign_proc("C",
-    library.version(Version::out, Fullarch::out),
+    library.version(Version::out, Fullarch::out, GitRevision::out),
     [will_not_call_mercury, promise_pure, thread_safe, will_not_modify_trail],
 "
     MR_ConstString version_string = MR_VERSION;
     MR_ConstString fullarch_string = MR_FULLARCH;
+    MR_ConstString git_revision_string = MR_GIT_REVISION;
     /*
     ** Cast away const needed here, because Mercury declares Version
     ** with type MR_String rather than MR_ConstString.
     */
     Version = (MR_String) (MR_Word) version_string;
     Fullarch = (MR_String) (MR_Word) fullarch_string;
+    GitRevision = (MR_String) (MR_Word) git_revision_string;
 ").
 
 :- pragma foreign_proc("C#",
-    library.version(Version::out, Fullarch::out),
+    library.version(Version::out, Fullarch::out, GitRevision::out),
     [will_not_call_mercury, promise_pure, thread_safe],
 "
     Version = runtime.Constants.MR_VERSION;
     Fullarch = runtime.Constants.MR_FULLARCH;
+    GitRevision = runtime.Constants.MR_GIT_REVISION;
 ").
 
 :- pragma foreign_proc("Java",
-    library.version(Version::out, Fullarch::out),
+    library.version(Version::out, Fullarch::out, GitRevision::out),
     [will_not_call_mercury, promise_pure, thread_safe],
 "
     Version = jmercury.runtime.Constants.MR_VERSION;
     Fullarch = jmercury.runtime.Constants.MR_FULLARCH;
+    GitRevision = jmercury.runtime.Constants.MR_GIT_REVISION;
 ").
 
 :- pragma foreign_proc("Erlang",
-    library.version(Version::out, Fullarch::out),
+    library.version(Version::out, Fullarch::out, GitRevision::out),
     [will_not_call_mercury, promise_pure, thread_safe],
 "
     Version = << ?MR_VERSION >>,
-    Fullarch = << ?MR_FULLARCH >>
+    Fullarch = << ?MR_FULLARCH >>,
+    GitRevision = << ?MR_GIT_REVISION >>
 ").
 
 %---------------------------------------------------------------------------%
