@@ -582,10 +582,6 @@ invoke_system_command_maybe_filter_output(Globals, ErrorStream, Verbosity,
             % XXX can't use Bourne shell syntax to redirect on .NET
             % XXX the output will go to the wrong place!
             CommandRedirected = Command
-        else if use_win32 then
-            % On windows we can't in general redirect standard error in the
-            % shell.
-            CommandRedirected = Command ++ " > " ++ TmpFile
         else
             CommandRedirected =
                 string.append_list([Command, " > ", TmpFile, " 2>&1"])
@@ -637,20 +633,11 @@ invoke_system_command_maybe_filter_output(Globals, ErrorStream, Verbosity,
         (
             ProcessedTmpFileResult = ok(ProcessedTmpFile),
 
-            % XXX we should get rid of use_win32
-            ( if use_win32 then
-                get_system_env_type(Globals, SystemEnvType),
-                ( if SystemEnvType = env_type_powershell then
-                    ProcessOutputRedirected = string.append_list(
-                        ["Get-Content ", TmpFile, " | ", ProcessOutput,
-                            " > ", ProcessedTmpFile, " 2>&1"])
-                else
-                    % On windows we can't in general redirect standard
-                    % error in the shell.
-                    ProcessOutputRedirected = string.append_list(
-                        [ProcessOutput, " < ", TmpFile, " > ",
-                            ProcessedTmpFile])
-                )
+            get_system_env_type(Globals, SystemEnvType),
+            ( if SystemEnvType = env_type_powershell then
+                ProcessOutputRedirected = string.append_list(
+                    ["Get-Content ", TmpFile, " | ", ProcessOutput,
+                        " > ", ProcessedTmpFile, " 2>&1"])
             else
                 ProcessOutputRedirected = string.append_list(
                     [ProcessOutput, " < ", TmpFile, " > ",
