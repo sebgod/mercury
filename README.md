@@ -10,6 +10,32 @@ More information is available on the
 in other README files in the source code repository, and in the
 [documentation](http://www.mercurylang.org/documentation/documentation.html).
 
+## Cloning Mercury
+
+The Mercury repository requires Git's core.autocrlf feature to be turned off,
+in order to guarantee seamless building please use the following git settings before you
+clone the Mercury repository:
+```sh
+git config --global core.autocrlf false # you can also use --system
+```
+In case you already cloned Mercury, or in case you do not want to modify the global configuration,
+you can use:
+```sh
+git config --local core.autocrlf false
+# before running this make sure you have no unsafed changes
+git rm --cached -r . # remove files from Git's index
+git reset --hard # Rewrite the Git index to pick up all the new line endings
+```
+Finally for cloning you can use:
+```sh
+git clone https://github.com/Mercury-Language/mercury.git
+```
+If you rather like to work in a Mercury fork, you have to fork the required Git sub-modules as well:
+  - [bdwgc](https://github.com/Mercury-Language/bdwgc)
+  - [libatomic_ops](https://github.com/Mercury-Language/libatomic_ops)
+
+After cloning, please run `./prepare.sh` from the repository root to clone the required Git sub-modules and to run autoconf.
+
 ## README files
 
 The Mercury compiler has a number of different
