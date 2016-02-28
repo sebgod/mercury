@@ -2459,7 +2459,7 @@ get_restricted_command_line_link_opts(Globals, LinkTargetType,
                 ResCmdLinkFlags = [
                     "-nologo",
                     "-subsystem:console",
-                    "-machine:x86",
+                    "-machine:amd64",
                     "-entry:wmainCRTStartup",
                     "-defaultlib:libcmt"
                 ],

@@ -10,6 +10,7 @@
 *.prof
 *.err
 *.exe
+*.ilk
 *.int
 *.int0
 *.int2
@@ -34,6 +35,7 @@ Mercury.modules
 .deep.tags
 DEEP_FLAGS
 *.o
+*.obj
 *.opt
 *.optdate
 config.log

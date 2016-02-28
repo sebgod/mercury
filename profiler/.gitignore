@@ -10,6 +10,7 @@
 *.prof
 *.err
 *.exe
+*.ilk
 *.int
 *.int0
 *.int2
@@ -17,7 +18,9 @@
 *.date
 *.date0
 *.date3
+*.dep_err
 *.o
+*.obj
 *.opt
 *.optdate
 *.trans_opt

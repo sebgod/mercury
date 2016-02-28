@@ -8,8 +8,11 @@ tags
 *.dep
 *.dep_err
 *.dv
+*.ilk
 *.mh
 *.mih
 *.o
+*.obj
+*.pdb
 *.err
 *.exe

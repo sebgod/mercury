@@ -1,6 +1,7 @@
 *.c
 *.c_date
 *.d
+*.dep_err
 *.date
 *.date0
 *.date3
@@ -14,6 +15,7 @@
 *.dylib
 *.mih
 *.o
+*.obj
 *.opt
 *.optdate
 *.prof

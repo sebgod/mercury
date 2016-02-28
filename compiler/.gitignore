@@ -1,10 +1,12 @@
 *.c
 *.d
+*.dep_err
 *.h
 *.obj
 *.exe
 *.prof
 *.err
+*.ilk
 *.int
 *.int0
 *.int2

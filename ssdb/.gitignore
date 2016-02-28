@@ -15,10 +15,14 @@ SSDB_FLAGS
 *.int0
 *.int2
 *.int3
+*.ilk
+*.lib
 *.mh
 *.mih
+*.pdb
 *.pic_o
 *.o
+*.obj
 *.opt
 *.optdate
 *.so

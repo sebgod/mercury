@@ -4,5 +4,6 @@ mdemangle
 mfiltercc
 info_to_mdb
 pad_backslash
+*.obj
 *.exe
 tags

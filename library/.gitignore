@@ -14,8 +14,10 @@
 *.date
 *.date0
 *.date3
+*.dep_err
 *.pic_o
 *.o
+*.obj
 *.opt
 *.optdate
 *.trans_opt
