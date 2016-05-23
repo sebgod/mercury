@@ -311,7 +311,9 @@ fact_table_compile_facts_2(PredName, Arity, FileName, !PredInfo, Context,
             pred_info_set_proc_table(ProcTable, !PredInfo),
             io.make_temp_file(DataFileNameResult, !IO),
             (
-                DataFileNameResult = ok(DataFileName),
+                DataFileNameResult = ok(make_temp_result(DataFileName,
+                    TempStream)),
+                io.close_output(TempStream, !IO),
                 write_fact_table_arrays(ProcFiles, DataFileName, StructName,
                     ProcTable, ModuleInfo, NumFacts, FactArgInfos,
                     WriteHashTables, WriteDataAfterSorting, OutputStream,
@@ -979,15 +981,15 @@ fact_table_mode_type([Mode | Modes], ModuleInfo, ModeType) :-
 
 open_sort_files([], [], !Errors, !IO).
 open_sort_files([ProcID | ProcIDs], ProcStreams, !Errors, !IO) :-
-    open_temp_output(SortFileNameResult, !IO),
+    make_temp_file(SortFileNameResult, !IO),
     (
-        SortFileNameResult = ok({_SortFileName, Stream}),
+        SortFileNameResult = ok(make_temp_result(_SortFileName, Stream)),
         open_sort_files(ProcIDs, ProcStreams0, !Errors, !IO),
         ProcStreams = [proc_stream(ProcID, Stream) | ProcStreams0]
     ;
-        SortFileNameResult = error(ErrorMessage),
+        SortFileNameResult = error(Error),
         ProcStreams = [],
-        add_error_report([words(ErrorMessage)], !Errors)
+        add_error_report([words(error_message(Error))], !Errors)
     ).
 
     % close_sort_files(ProcStreams, ProcFiles, !IO):

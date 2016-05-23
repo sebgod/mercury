@@ -84,7 +84,8 @@ server_name(ServerName, !IO) :-
 server_name_2(ServerName, !IO) :-
     io.make_temp_file(TmpFileResult, !IO),
     (
-        TmpFileResult = ok(TmpFile),
+        TmpFileResult = ok(make_temp_result(TmpFile, TmpFileStreamClose)),
+        io.close_output(TmpFileStreamClose, !IO),
         hostname_cmd(HostnameCmd),
         ServerRedirectCmd =
             string.format("%s > %s", [s(HostnameCmd), s(TmpFile)]),

@@ -1254,9 +1254,9 @@ invoke_mkinit(Globals, InitFileStream, Verbosity,
     % mkinit expects unquoted file names.
     join_string_list(FileNames, "", "\n", "", TargetFileNames),
 
-    open_temp_output(TmpFileResult, !IO),
+    make_temp_file(TmpFileResult, !IO),
     (
-        TmpFileResult = ok({TmpFile, TmpStream}),
+        TmpFileResult = ok(make_temp_result(TmpFile, TmpStream)),
         io.write_string(TmpStream, TargetFileNames, !IO),
         io.close_output(TmpStream, !IO),
 
@@ -1273,8 +1273,8 @@ invoke_mkinit(Globals, InitFileStream, Verbosity,
             MkInitOK = no
         )
     ;
-        TmpFileResult = error(ErrorMessage),
-        io.write_string(io.stderr_stream, ErrorMessage, !IO),
+        TmpFileResult = error(Error),
+        io.write_string(io.stderr_stream, error_message(Error), !IO),
         io.nl(!IO),
         MkInitOK = no
     ).
@@ -1982,7 +1982,8 @@ link_exe_or_shared_lib(Globals, ErrorStream, LinkTargetType, ModuleName,
             io.get_temp_directory(TempDir, !IO),
             io.make_temp_file(TempDir, "", LibExt, TmpArchiveResult, !IO),
             (
-                TmpArchiveResult = ok(TmpArchive),
+                TmpArchiveResult = ok(make_temp_result(TmpArchive, TmpStream)),
+                close_output(TmpStream, !IO),
                 % Only include actual object files in the temporary archive,
                 % not other files such as other archives.
                 filter_object_files(Globals, ObjectsList,
@@ -3055,9 +3056,9 @@ create_java_exe_or_lib(Globals, ErrorStream, LinkTargetType, MainModuleName,
     % extremely long. We create the temporary file in the current directory to
     % avoid problems under Cygwin, where absolute paths will be interpreted
     % incorrectly when passed to a non-Cygwin jar program.
-    open_temp_output(".", "mtmp", "", TempFileResult, !IO),
+    make_temp_file(".", "mtmp", "", TempFileResult, !IO),
     (
-        TempFileResult = ok({TempFileName, Stream}),
+        TempFileResult = ok(make_temp_result(TempFileName, Stream)),
         list.foldl(write_jar_class_argument(Stream, ClassSubDir),
             ListClassFiles, !IO),
         io.close_output(Stream, !IO),
@@ -3074,8 +3075,8 @@ create_java_exe_or_lib(Globals, ErrorStream, LinkTargetType, MainModuleName,
             io.remove_file(JarFileName, _, !IO)
         )
     ;
-        TempFileResult = error(ErrorMessage),
-        io.write_string(ErrorStream, ErrorMessage, !IO),
+        TempFileResult = error(Error),
+        io.write_string(ErrorStream, error_message(Error), !IO),
         io.nl(!IO),
         Succeeded0 = no
     ),
@@ -3473,9 +3474,9 @@ invoke_long_system_command_maybe_filter_output(Globals, ErrorStream, Verbosity,
         RestrictedCommandLine = yes,
 
         % Avoid generating very long command lines by using @files.
-        open_temp_output(TmpFileResult, !IO),
+        make_temp_file(TmpFileResult, !IO),
         (
-            TmpFileResult = ok({TmpFile, TmpStream}),
+            TmpFileResult = ok(make_temp_result(TmpFile, TmpStream)),
 
             % We need to escape any \ before writing them to the file,
             % otherwise we lose them.
@@ -3513,8 +3514,8 @@ invoke_long_system_command_maybe_filter_output(Globals, ErrorStream, Verbosity,
                 Succeeded = no
             )
         ;
-            TmpFileResult = error(ErrorMessage),
-            io.write_string(stderr_stream, ErrorMessage, !IO),
+            TmpFileResult = error(Error),
+            io.write_string(stderr_stream, error_message(Error), !IO),
             io.nl(!IO),
             Succeeded = no
         )

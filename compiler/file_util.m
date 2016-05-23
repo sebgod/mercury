@@ -133,18 +133,6 @@
 
 %-----------------------------------------------------------------------------%
 
-    % open_temp_output(Dir, Prefix, Suffix, Result, !IO)
-    %
-    % Create a temporary file and open it for writing.  If successful Result
-    % returns the file's name and output stream.  On error any temporary
-    % file will be removed.
-    %
-:- pred open_temp_output(string::in, string::in, string::in,
-    maybe_error({string, text_output_stream})::out, io::di, io::uo) is det.
-
-:- pred open_temp_output(maybe_error({string, text_output_stream})::out,
-    io::di, io::uo) is det.
-
     % open_temp_input(Result, WritePred, !IO)
     %
     % Create a temporary file and call WritePred which will write data to
@@ -463,41 +451,11 @@ make_install_dir_command(Globals, SourceDirName, InstallDir) = Command :-
 
 %-----------------------------------------------------------------------------%
 
-open_temp_output(Dir, Prefix, Suffix, Result, !IO) :-
-    make_temp_file(Dir, Prefix, Suffix, TempFileResult, !IO),
-    open_temp_output_2(TempFileResult, Result, !IO).
-
-open_temp_output(Result, !IO) :-
-    make_temp_file(TempFileResult, !IO),
-    open_temp_output_2(TempFileResult, Result, !IO).
-
-:- pred open_temp_output_2(io.res(string)::in,
-    maybe_error({string, text_output_stream})::out, io::di, io::uo) is det.
-
-open_temp_output_2(TempFileResult, Result, !IO) :-
-    (
-        TempFileResult = ok(TempFileName),
-        open_output(TempFileName, OpenResult, !IO),
-        (
-            OpenResult = ok(Stream),
-            Result = ok({TempFileName, Stream})
-        ;
-            OpenResult = error(Error),
-            remove_file(TempFileName, _, !IO),
-            Result = error(format(
-                "could not open temporary file `%s': %s",
-                [s(TempFileName), s(error_message(Error))]))
-        )
-    ;
-        TempFileResult = error(Error),
-        Result = error(format("could not create temporary file: %s",
-            [s(error_message(Error))]))
-    ).
-
 open_temp_input(Result, Pred, !IO) :-
     make_temp_file(TempFileResult, !IO),
     (
-        TempFileResult = ok(TempFileName),
+        TempFileResult = ok(make_temp_result(TempFileName, TempStream)),
+        io.close_output(TempStream, !IO),
         Pred(TempFileName, PredResult, !IO),
         (
             PredResult = ok,

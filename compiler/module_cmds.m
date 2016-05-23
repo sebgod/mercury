@@ -577,7 +577,8 @@ invoke_system_command_maybe_filter_output(Globals, ErrorStream, Verbosity,
 
     io.make_temp_file(TmpFileResult, !IO),
     (
-        TmpFileResult = ok(TmpFile),
+        TmpFileResult = ok(make_temp_result(TmpFile, TmpFileStreamPrime)),
+        close_output(TmpFileStreamPrime, !IO),
         ( if use_dotnet then
             % XXX can't use Bourne shell syntax to redirect on .NET
             % XXX the output will go to the wrong place!
@@ -635,7 +636,9 @@ invoke_system_command_maybe_filter_output(Globals, ErrorStream, Verbosity,
     then
         io.make_temp_file(ProcessedTmpFileResult, !IO),
         (
-            ProcessedTmpFileResult = ok(ProcessedTmpFile),
+            ProcessedTmpFileResult = ok(make_temp_result(ProcessedTmpFile,
+                ProcessedTmpFileStream)),
+            close_output(ProcessedTmpFileStream, !IO),
 
             % XXX we should get rid of use_win32
             ( if use_win32 then

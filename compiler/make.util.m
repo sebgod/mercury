@@ -1073,15 +1073,16 @@ redirect_output(_ModuleName, MaybeErrorStream, !Info, !IO) :-
     % Write the output to a temporary file first, so it's easy to just print
     % the part of the error file that relates to the current command. It will
     % be appended to the error file later.
-    open_temp_output(ErrorFileResult, !IO),
+    make_temp_file(ErrorFileResult, !IO),
     (
-        ErrorFileResult = ok({_ErrorFileName, ErrorOutputStream}),
+        ErrorFileResult = ok(make_temp_result(_ErrorFileName,
+            ErrorOutputStream)),
         MaybeErrorStream = yes(ErrorOutputStream)
     ;
-        ErrorFileResult = error(ErrorMessage),
+        ErrorFileResult = error(Error),
         MaybeErrorStream = no,
         with_locked_stdout(!.Info,
-            write_error_creating_temp_file(ErrorMessage), !IO)
+            write_error_creating_temp_file(error_message(Error)), !IO)
     ).
 
 unredirect_output(Globals, ModuleName, ErrorOutputStream, !Info, !IO) :-

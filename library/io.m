@@ -1319,6 +1319,12 @@
 % File handling predicates.
 %
 
+:- type make_temp_result
+    --->    make_temp_result(
+                mtr_filename        :: string,
+                mtr_file            :: output_stream
+            ).
+
     % make_temp_file(Result, !IO) creates an empty file whose name is different
     % to the name of any existing file.  If successful Result returns the name
     % of the file.  It is the responsibility of the caller to delete the file
@@ -1330,7 +1336,7 @@
     % with restrictive permissions (600 on Unix-like systems) and therefore
     % should not be used when security is required.
     %
-:- pred make_temp_file(io.res(string)::out, io::di, io::uo) is det.
+:- pred make_temp_file(io.res(make_temp_result)::out, io::di, io::uo) is det.
 
     % Like make_temp_file/3 except it throws an io.error exception if the
     % temporary file could not be created.
@@ -1356,8 +1362,8 @@
     % with restrictive permissions (600 on Unix-like systems) and therefore
     % should not be used when security is required.
     %
-:- pred make_temp_file(string::in, string::in, string::in, io.res(string)::out,
-    io::di, io::uo) is det.
+:- pred make_temp_file(string::in, string::in, string::in,
+    io.res(make_temp_result)::out, io::di, io::uo) is det.
 
     % Same as make_temp_file except it does not take a suffix argument and
     % throws an io.error exception if the temporary file could not be created.
@@ -1830,11 +1836,13 @@
 :- import_module exception.
 :- import_module int.
 :- import_module parser.
+:- import_module random.
 :- import_module require.
 :- import_module stream.string_writer.
 :- import_module term.
 :- import_module term_conversion.
 :- import_module term_io.
+:- import_module time.
 :- import_module type_desc.
 
 :- use_module rtti_implementation.
@@ -1930,7 +1938,7 @@ using System.Security.Principal;
         new System.Text.UTF8Encoding(false);
 
 #if __MonoCS__
-    // int chmod(const char *path, mode_t mode);
+    // int mkdir(const char *path, mode_t mode);
     [DllImport(""libc"", SetLastError=true, EntryPoint=""mkdir"",
         CallingConvention=CallingConvention.Cdecl)]
     static extern int ML_sys_mkdir (string path, uint mode);
@@ -10417,30 +10425,54 @@ make_temp_file(Result, !IO) :-
 make_temp(Name, !IO) :-
     make_temp_file(Result, !IO),
     (
-        Result = ok(Name)
+        Result = ok(make_temp_result(Name, OutputStream)),
+        close_output(OutputStream, !IO)
     ;
         Result = error(Error),
         throw(Error)
     ).
 
 make_temp_file(Dir, Prefix, Suffix, Result, !IO) :-
-    do_make_temp(Dir, Prefix, Suffix, char_to_string(dir.directory_separator),
-        Name, Okay, Message, !IO),
-    (
-        Okay = yes,
-        Result = ok(Name)
-    ;
-        Okay = no,
-        Result = error(make_io_error(Message))
-    ).
+    make_temp_loop(do_make_temp_file, make_temp_tries, Dir, Prefix, Suffix,
+        Result, !IO).
 
 make_temp(Dir, Prefix, Name, !IO) :-
     make_temp_file(Dir, Prefix, "", Result, !IO),
     (
-        Result = ok(Name)
+        Result = ok(make_temp_result(Name, OutputStream)),
+        close_output(OutputStream, !IO)
     ;
         Result = error(Error),
         throw(Error)
+    ).
+
+:- pred do_make_temp_file(string::in, okay_retry_or_error(make_temp_result)::out,
+    io::di, io::uo) is det.
+
+do_make_temp_file(Filename, Result, !IO) :-
+    % Try to open and create the file.
+    open_create_temp(Filename, Okay, Fd, Retry, Message, !IO),
+    (
+        Okay = yes,
+        fdopen(Fd, FdOpenOkay, OutputStream, StreamId, FdOpenMsg, !IO),
+        (
+            FdOpenOkay = yes,
+            insert_stream_info(OutputStream,
+                stream(StreamId, output, text, file(Filename)), !IO),
+            Result = ok(make_temp_result(Filename, output_stream(OutputStream)))
+        ;
+            FdOpenOkay = no,
+            Result = error(make_io_error(FdOpenMsg))
+        )
+    ;
+        Okay = no,
+        (
+            Retry = yes,
+            Result = retry
+        ;
+            Retry = no,
+            Result = error(make_io_error(Message))
+        )
     ).
 
 make_temp_directory(Result, !IO) :-
@@ -10448,56 +10480,94 @@ make_temp_directory(Result, !IO) :-
     make_temp_directory(Dir, "mtmp", "", Result, !IO).
 
 make_temp_directory(Dir, Prefix, Suffix, Result, !IO) :-
-    do_make_temp_directory(Dir, Prefix, Suffix,
-        char_to_string(dir.directory_separator), DirName, Okay, Message, !IO),
+    make_temp_loop(do_make_temp_directory(Dir), make_temp_tries, Dir, Prefix,
+        Suffix, Result, !IO).
+
+:- pred do_make_temp_directory(string::in, string::in,
+    okay_retry_or_error(string)::out, io::di, io::uo) is det.
+
+do_make_temp_directory(Dir, Dirname, Result, !IO) :-
+    % Try to open and create the file.
+    % The dir argument is only used on C# backends.
+    mkdir_temp(Dir, Dirname, Okay, Retry, Message, !IO),
     (
         Okay = yes,
-        Result = ok(DirName)
+        Result = ok(Dirname)
     ;
         Okay = no,
-        Result = error(make_io_error(Message))
+        (
+            Retry = yes,
+            Result = retry
+        ;
+            Retry = no,
+            Result = error(make_io_error(Message))
+        )
     ).
+
+:- func make_temp_tries = int.
+
+make_temp_tries = 20.
 
 %-----------------------------------------------------------------------%
 
-:- pragma foreign_decl("Java", local,
-"
-import java.io.File;
-import java.io.IOException;
-import java.util.Random;
-").
+:- type okay_retry_or_error(T)
+    --->    ok(T)
+    ;       retry
+    ;       error(io.error).
 
-:- pragma foreign_code("Java",
-"
-    public static Random ML_rand = new Random();
+:- mutable(rand_temp_file, maybe(random.supply), no, ground,
+    [attach_to_io_state, untrailed]).
 
-    public static String makeTempName(String prefix, String suffix)
-    {
-        StringBuilder sb = new StringBuilder();
+:- pred make_temp_loop(pred(string, okay_retry_or_error(T), io, io),
+    int, string, string, string, io.res(T), io, io).
+:- mode make_temp_loop(pred(in, out, di, uo) is det,
+    in, in, in, in, out, di, uo) is det.
 
-        sb.append(prefix);
-        // Make an 8-digit mixed case alpha-numeric code.
-        for (int i = 0; i < 8; i++) {
-            char c;
-            int c_num = ML_rand.nextInt(10+26+26);
-            if (c_num < 10) {
-                c_num = c_num + '0';
-            } else if (c_num < 10+26) {
-                c_num = c_num + 'A' - 10;
-            } else{
-                c_num = c_num + 'a' - 10 - 26;
-            }
-            c = (char)c_num;
-            sb.append(c);
-        }
-        sb.append(suffix);
+make_temp_loop(DoMakeTemp, Tries, Dir, Prefix, Suffix, Result, !IO) :-
+    ( if Tries > 0 then
+        % Generate a randomised file name.
+        get_rand_temp_file(MaybeSupply, !IO),
+        (
+            MaybeSupply = no,
+            random.init(Supply0, !IO)
+        ;
+            MaybeSupply = yes(Supply0)
+        ),
+        get_rand_chars(6, Chars, Supply0, Supply),
+        Sep = char_to_string(dir.directory_separator),
+        Filename = Dir ++ Sep ++ Prefix ++ from_char_list(Chars) ++ Suffix,
+        set_rand_temp_file(yes(Supply), !IO),
 
-        return sb.toString();
-    }
-").
+        % Try to create the file.
+        DoMakeTemp(Filename, Result0, !IO),
+        (
+            Result0 = ok(X),
+            Result = ok(X)
+        ;
+            Result0 = retry,
+            make_temp_loop(DoMakeTemp, Tries - 1, Dir, Prefix, Suffix, Result,
+                !IO)
+        ;
+            Result0 = error(Error),
+            Result = error(Error)
+        )
+    else
+        Result = error(make_io_error("Could not create unique file name"))
+    ).
 
-:- pred do_make_temp(string::in, string::in, string::in,
-    string::in, string::out, bool::out, string::out, io::di, io::uo) is det.
+:- pred get_rand_chars(int::in, list(char)::out, supply::in, supply::out) is det.
+
+get_rand_chars(Num, Chars, !Supply) :-
+    ( if Num < 1 then
+        Chars = []
+    else
+        get_rand_chars(Num - 1, Chars0, !Supply),
+        random(0, 36, Rand, !Supply),
+        Char = det_base_int_to_digit(36, Rand),
+        Chars = [Char | Chars0]
+    ).
+
+%-----------------------------------------------------------------------%
 
 % XXX The code for io.make_temp assumes POSIX. It uses the functions open(),
 % close(), and getpid() and the macros EEXIST, O_WRONLY, O_CREAT, and O_EXCL.
@@ -10505,275 +10575,247 @@ import java.util.Random;
 % dependencies.
 
 :- pragma foreign_decl("C", "
-#ifdef MR_HAVE_UNISTD_H
-    #include <unistd.h>
-#endif
-    #include <sys/types.h>
-    #include <sys/stat.h>
-    #include <fcntl.h>
-
-    #define ML_MAX_TEMPNAME_TRIES   (6 * 4)
-
-    extern long ML_io_tempnam_counter;
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 ").
 
-:- pragma foreign_code("C", "
-    long    ML_io_tempnam_counter = 0;
+:- pragma foreign_decl("Java", local,
+"
+import java.io.File;
+import java.io.IOException;
+import java.io.FileOutputStream;
 ").
+
+:- type temp_file.
+
+:- pragma foreign_type("C", temp_file, "int",
+    [can_pass_as_mercury_type, stable]).
+:- pragma foreign_type("Java", temp_file, "FileOutputStream").
+:- pragma foreign_type("C#", temp_file, "FileStream").
+
+:- pred open_create_temp(string::in, bool::out, temp_file::out, bool::out,
+    string::out, io::di, io::uo) is det.
 
 :- pragma foreign_proc("C",
-    do_make_temp(Dir::in, Prefix::in, Suffix::in, Sep::in, FileName::out,
-        Okay::out, ErrorMessage::out, _IO0::di, _IO::uo),
-    [will_not_call_mercury, promise_pure, tabled_for_io,
-        does_not_affect_liveness],
+    open_create_temp(Filename::in, Okay::out, Fd::out, Retry::out,
+        Message::out, _IO0::di, _IO::uo),
+    [will_not_call_mercury, promise_pure, thread_safe, tabled_for_io],
 "
-#ifdef MR_HAVE_MKSTEMP
-    int err, fd;
-
-    FileName = MR_make_string(MR_ALLOC_ID, ""%s%s%.5sXXXXXX%s"",
-        Dir, Sep, Prefix, Suffix);
-    fd = mkstemp(FileName);
-    if (fd == -1) {
-        ML_maybe_make_err_msg(MR_TRUE, errno,
-            ""error opening temporary file: "", MR_ALLOC_ID,
-            ErrorMessage);
+    Fd = open(Filename, O_WRONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
+    ML_maybe_make_err_msg((Fd == -1) && (errno != EEXIST), errno,
+        ""Create temporary file failed: "", MR_ALLOC_ID, Message);
+    if (Fd == -1) {
         Okay = MR_NO;
+        if (errno == EEXIST) {
+            Retry = MR_YES;
+        } else {
+            Retry = MR_NO;
+        }
     } else {
-        do {
-            err = close(fd);
-        } while (err == -1 && MR_is_eintr(errno));
-        ML_maybe_make_err_msg(err, errno,
-            ""error closing temporary file: "", MR_ALLOC_ID,
-            ErrorMessage);
-        Okay = err == 0 ? MR_YES : MR_NO;
+        Okay = MR_YES;
+        Retry = MR_NO;
     }
-#else
-    /*
-    ** Constructs a temporary name by concatenating Dir, `/', the first 5 chars
-    ** of Prefix, six hex digits, and Suffix. The six digit hex number is
-    ** generated by starting with the pid of this process.  Uses
-    ** `open(..., O_CREATE | O_EXCL, ...)' to create the file, checking that
-    ** there was no existing file with that name.
-    */
-    int     len, err, fd, num_tries;
-    char    countstr[256];
-    MR_Word filename_word;
-    int     flags;
-
-    len = strlen(Dir) + 1 + 5 + 6 + strlen(Suffix) + 1;
-    /* Dir + / + Prefix + counter + Suffix + \\0 */
-    MR_offset_incr_hp_atomic_msg(filename_word, 0,
-        (len + sizeof(MR_Word)) / sizeof(MR_Word),
-        MR_ALLOC_ID, ""string.string/0"");
-    FileName = (MR_String) filename_word;
-    if (ML_io_tempnam_counter == 0) {
-        ML_io_tempnam_counter = getpid();
-    }
-    num_tries = 0;
-    do {
-        sprintf(countstr, ""%06lX"", ML_io_tempnam_counter & 0xffffffL);
-        strcpy(FileName, Dir);
-        strcat(FileName, Sep);
-        strncat(FileName, Prefix, 5);
-        strncat(FileName, countstr, 6);
-        strcat(FileName, Suffix);
-        flags = O_WRONLY | O_CREAT | O_EXCL;
-        do {
-            #ifdef MR_WIN32
-                fd = _wopen(ML_utf8_to_wide(FileName), flags, 0600);
-            #else
-                fd = open(FileName, flags, 0600);
-            #endif
-        } while (fd == -1 && MR_is_eintr(errno));
-        num_tries++;
-        ML_io_tempnam_counter += (1 << num_tries);
-    } while (fd == -1 && errno == EEXIST &&
-        num_tries < ML_MAX_TEMPNAME_TRIES);
-    if (fd == -1) {
-        ML_maybe_make_err_msg(MR_TRUE, errno,
-            ""error opening temporary file: "", MR_ALLOC_ID,
-            ErrorMessage);
-        Okay = MR_NO;
-    }  else {
-        do {
-            err = close(fd);
-        } while (err == -1 && MR_is_eintr(errno));
-        ML_maybe_make_err_msg(err, errno,
-            ""error closing temporary file: "", MR_ALLOC_ID,
-            ErrorMessage);
-        Okay = err == 0 ? MR_YES : MR_NO;
-    }
-#endif
 ").
-
-:- pragma foreign_proc("C#",
-    do_make_temp(_Dir::in, _Prefix::in, _Suffix::in, _Sep::in, FileName::out,
-        Okay::out, ErrorMessage::out, _IO0::di, _IO::uo),
-    [will_not_call_mercury, promise_pure, tabled_for_io, thread_safe],
-"{
-    try {
-        FileName = System.IO.Path.GetTempFileName();
-        Okay = mr_bool.YES;
-        ErrorMessage = """";
-    }
-    catch (System.Exception e)
-    {
-        FileName = """";
-        Okay = mr_bool.NO;
-        ErrorMessage = e.Message;
-    }
-}").
 
 :- pragma foreign_proc("Java",
-    do_make_temp(Dir::in, Prefix::in, Suffix::in, _Sep::in, FileName::out,
-        Okay::out, ErrorMessage::out, _IO0::di, _IO::uo),
-    [will_not_call_mercury, promise_pure, tabled_for_io, thread_safe,
-        may_not_duplicate],
+    open_create_temp(Filename::in, Okay::out, Stream::out, Retry::out,
+        Message::out, _IO0::di, _IO::uo),
+    [will_not_call_mercury, promise_pure, thread_safe, tabled_for_io],
 "
+    File file = new File(Filename);
+
     try {
-        File    new_file;
-
-        if (Prefix.length() > 5) {
-            // The documentation for io.make_temp says that we should only use
-            // the first five characters of Prefix.
-            Prefix = Prefix.substring(0, 5);
-        }
-
-        new_file = new File(new File(Dir), makeTempName(Prefix, Suffix));
-        if (new_file.createNewFile()) {
-            FileName = new_file.getAbsolutePath();
+        if (file.createNewFile()) {
+            Stream = new java.io.FileOutputStream(file);
             Okay = bool.YES;
-            ErrorMessage = """";
+            Retry = bool.NO;
+            Message = """";
         } else {
-            FileName = """";
+            Stream = null;
             Okay = bool.NO;
-            ErrorMessage = ""Could not create file"";
+            Retry = bool.YES;
+            Message = ""File already exists"";
         }
-    } catch (IOException e) {
-        FileName = """";
+    } catch (Exception e) {
+        Stream = null;
         Okay = bool.NO;
-        ErrorMessage = e.toString();
+        Retry = bool.NO;
+        Message = e.getMessage();
     }
-").
-
-:- pragma foreign_proc("Erlang",
-    do_make_temp(Dir::in, Prefix::in, Suffix::in, Sep::in, FileName::out,
-        Okay::out, ErrorMessage::out, _IO0::di, _IO::uo),
-    [will_not_call_mercury, promise_pure, tabled_for_io,
-        does_not_affect_liveness],
-"
-    DirStr = binary_to_list(Dir),
-    PrefixStr = binary_to_list(Prefix),
-    SuffixStr = binary_to_list(Suffix),
-    SepStr = binary_to_list(Sep),
-
-    % Constructs a temporary name by concatenating Dir, Sep, Prefix
-    % three hex digits, '.', and 3 more hex digits.
-
-    % XXX we should try to mix in the Erlang process id in case two Erlang
-    % processes from the same Unix process are trying to create temporary files
-    % at the same time (it's not as far-fetched as it sounds, e.g. mmc --make)
-
-    MaxTries = 24,
-
-    {A1, A2, A3} = now(),
-    case string:to_integer(os:getpid()) of
-        {Pid, []} ->
-            void;
-        _ ->
-            Pid = 0
-    end,
-    Seed = {A1 + Pid, A2, A3},
-
-    case
-        mercury__io:'ML_do_make_temp_2'(DirStr, PrefixStr, SuffixStr, SepStr,
-            MaxTries, Seed)
-    of
-        {ok, FileName0} ->
-            FileName = list_to_binary(FileName0),
-            Okay = {yes},
-            ErrorMessage = <<>>;
-        {error, Reason} ->
-            FileName = <<>>,
-            Okay = {no},
-            ErrorMessage = list_to_binary(Reason)
-    end
-").
-
-:- pragma foreign_decl("Erlang", local, "
-    -export(['ML_do_make_temp_2'/6]).
-").
-:- pragma foreign_code("Erlang", "
-    'ML_do_make_temp_2'(_, _, _, _, 0, _) ->
-        {error, ""error opening temporary file""};
-    'ML_do_make_temp_2'(Dir, Prefix, Suffix, Sep, Tries, Seed0) ->
-        {R1, Seed1} = random:uniform_s(16#1000, Seed0),
-        {R2, Seed}  = random:uniform_s(16#1000, Seed1),
-        FileName = lists:flatten(io_lib:format(""~s~s~s~3.16.0B.~3.16.0B~s"",
-            [Dir, Sep, Prefix, R1, R2, Suffix])),
-        case filelib:is_file(FileName) of
-            true ->
-                'ML_do_make_temp_2'(Dir, Prefix, Suffix, Sep, Tries - 1, Seed);
-            false ->
-                case file:open(FileName, [write, {encoding, utf8}]) of
-                    {ok, IoDevice} ->
-                        case file:close(IoDevice) of
-                            ok ->
-                                {ok, FileName};
-                            {error, Reason} ->
-                                {error, file:format_error(Reason)}
-                        end;
-                    {error, _} ->
-                        'ML_do_make_temp_2'(Dir, Prefix, Suffix, Sep,
-                            Tries - 1, Seed)
-                end
-        end.
-").
-
-%-----------------------------------------------------------------------%
-
-:- pred do_make_temp_directory(string::in, string::in, string::in, string::in,
-    string::out, bool::out, string::out, io::di, io::uo) is det.
-
-:- pragma foreign_proc("C",
-    do_make_temp_directory(Dir::in, Prefix::in, Suffix::in, Sep::in,
-        DirName::out, Okay::out, ErrorMessage::out, _IO0::di, _IO::uo),
-    [will_not_call_mercury, promise_pure, tabled_for_io,
-        does_not_affect_liveness],
-"
-#ifdef MR_HAVE_MKDTEMP
-    int err;
-
-    DirName = MR_make_string(MR_ALLOC_ID, ""%s%s%.5sXXXXXX%s"",
-        Dir, Sep, Prefix, Suffix);
-    DirName = mkdtemp(DirName);
-    if (DirName == NULL) {
-        ML_maybe_make_err_msg(MR_TRUE, errno,
-            ""error creating temporary directory: "", MR_ALLOC_ID,
-            ErrorMessage);
-        Okay = MR_NO;
-    } else {
-        ErrorMessage = MR_make_string_const("""");
-        Okay = MR_YES;
-    }
-#else
-    #warning ""Your system does not have mkdtemp""
-    Okay = MR_NO;
-    ErrorMessage =
-        MR_make_string_const(""Your system does not have mkdtemp"");
-    DirName = MR_make_string_const("""");
-#endif /* HAVE_MKDTEMP */
 ").
 
 :- pragma foreign_proc("C#",
-    do_make_temp_directory(Dir::in, _Prefix::in, _Suffix::in, _Sep::in,
-        DirName::out, Okay::out, ErrorMessage::out, _IO0::di, _IO::uo),
+    open_create_temp(Filename::in, Okay::out, Stream::out, Retry::out,
+        Message::out, _IO0::di, _IO::uo),
+    [will_not_call_mercury, promise_pure, thread_safe, tabled_for_io],
+"
+	try {
+        // XXX: is FileShare.None correct?
+        Stream = new FileStream(Filename, FileMode.CreateNew, FileAccess.Write,
+            FileShare.None);
+        Okay = mr_bool.YES;
+        Retry = mr_bool.NO;
+        Message = String.Empty;
+    }
+    catch (IOException e) {
+        // This is the exception that is thrown if the file already exists.
+        Okay = mr_bool.NO;
+        Stream = null;
+        Retry = mr_bool.YES;
+        Message = e.Message;
+    }
+    catch (System.Exception e) {
+        Okay = mr_bool.NO;
+        Stream = null;
+        Retry = mr_bool.NO;
+        Message = e.Message;
+    }
+").
+
+:- pred close_fd(temp_file::in, io::di, io::uo) is det.
+
+:- pragma foreign_proc("C",
+    close_fd(Fd::in, _IO0::di, _IO::uo),
+    [will_not_call_mercury, promise_pure, thread_safe, tabled_for_io],
+"
+    close(Fd);
+").
+
+:- pragma foreign_proc("Java",
+    close_fd(Stream::in, _IO0::di, _IO::uo),
+    [will_not_call_mercury, promise_pure, thread_safe, tabled_for_io],
+"
+    Stream.close();
+").
+
+:- pragma foreign_proc("C#",
+    close_fd(Stream::in, _IO0::di, _IO::uo),
+    [will_not_call_mercury, promise_pure, thread_safe, tabled_for_io],
+"
+    Stream.Close();
+").
+
+:- pred fdopen(temp_file::in, bool::out, stream::out, int::out, string::out,
+    io::di, io::uo) is det.
+
+:- pragma foreign_proc("C",
+    fdopen(Fd::in, Okay::out, Stream::out, StreamId::out, Message::out,
+        _IO0::di, _IO::uo),
     [will_not_call_mercury, promise_pure, tabled_for_io, thread_safe],
-"{
+"
+    FILE            *file;
+
+    file = fdopen(Fd, ""w"");
+    if (file != NULL) {
+        Okay = MR_YES;
+        StreamId = mercury_next_stream_id();
+        MR_incr_hp_type_msg(Stream, MercuryFile, MR_ALLOC_ID, ""MercuryFile"");
+        MR_mercuryfile_init(file, 1, Stream);
+    } else {
+        Okay = MR_NO;
+        ML_maybe_make_err_msg(MR_FALSE, errno, ""fdopen failed: "",
+            MR_ALLOC_ID, Message);
+    }
+").
+
+:- pragma foreign_proc("Java",
+    fdopen(RawStream::in, Okay::out, Stream::out, StreamId::out, Message::out,
+        _IO0::di, _IO::uo),
+    [will_not_call_mercury, promise_pure, tabled_for_io, thread_safe],
+"
+    try {
+        Stream = new MR_TextOutputFile(RawStream);
+        StreamId = Stream.id;
+        Message = """";
+        Okay = bool.YES;
+    } catch (Exception e) {
+        Stream = null;
+        StreamId = -1;
+        Message = e.getMessage();
+        Okay = bool.NO;
+    }
+").
+
+:- pragma foreign_proc("C#",
+    fdopen(RawStream::in, Okay::out, Stream::out, StreamId::out, Message::out,
+        _IO0::di, _IO::uo),
+    [will_not_call_mercury, promise_pure, tabled_for_io, thread_safe],
+"
+    try {
+        Stream = mercury_file_init(new System.IO.BufferedStream(RawStream),
+            null, null, io.ML_default_line_ending);
+        StreamId = Stream.id;
+        Message = """";
+        Okay = mr_bool.YES;
+    } catch (Exception e) {
+        Stream = null;
+        StreamId = -1;
+        Message = e.Message;
+        Okay = mr_bool.NO;
+    }
+").
+
+:- pred mkdir_temp(string::in, string::in, bool::out, bool::out, string::out,
+    io::di, io::uo) is det.
+
+:- pragma foreign_proc("C",
+    mkdir_temp(_Dir::in, Dirname::in, Okay::out, Retry::out, Message::out,
+        _IO0::di, _IO::uo),
+    [will_not_call_mercury, promise_pure, thread_safe, tabled_for_io],
+"
+    int res;
+
+    res = mkdir(Dirname, S_IRUSR | S_IWUSR | S_IXUSR);
+    ML_maybe_make_err_msg((res == -1) && (errno != EEXIST), errno,
+        ""Create temporary directory failed: "", MR_ALLOC_ID, Message);
+    if (res == -1) {
+        Okay = MR_NO;
+        if (errno == EEXIST) {
+            Retry = MR_YES;
+        } else {
+            Retry = MR_NO;
+        }
+    } else {
+        Okay = MR_YES;
+        Retry = MR_NO;
+    }
+").
+
+:- pragma foreign_proc("Java",
+    mkdir_temp(_Dir::in, Dirname::in, Okay::out, Retry::out, Message::out,
+        _IO0::di, _IO::uo),
+    [will_not_call_mercury, promise_pure, thread_safe, tabled_for_io],
+"
+    File file = new File(Dirname);
+
+    if (file.exists()) {
+        Okay = bool.NO;
+        Retry = bool.YES;
+        Message = ""File already exists"";
+    } else if (file.mkdir()) {
+        Okay = bool.YES;
+        Retry = bool.NO;
+        Message = """";
+    } else {
+        Okay = bool.NO;
+        if (file.exists()) {
+            Retry = bool.YES;
+            Message = ""File already exists"";
+        } else {
+            Retry = bool.NO;
+            Message = ""Could not create file"";
+        }
+    }
+").
+
+:- pragma foreign_proc("C#",
+    mkdir_temp(Dir::in, Dirname::in, Okay::out, Retry::out, Message::out,
+        _IO0::di, _IO::uo),
+    [will_not_call_mercury, promise_pure, tabled_for_io, thread_safe],
+"
     try
     {
-        DirName = Path.Combine(Dir, Path.GetRandomFileName());
-
         switch (Environment.OSVersion.Platform)
         {
             case PlatformID.Win32NT:
@@ -10794,33 +10836,38 @@ import java.util.Random;
                         AccessControlType.Allow
                     )
                 );
-                Directory.CreateDirectory(DirName, security);
-                ErrorMessage = string.Empty;
+                Directory.CreateDirectory(Dirname, security);
+                Message = string.Empty;
                 Okay = mr_bool.YES;
+                Retry = mr_bool.NO;
                 break;
 
 #if __MonoCS__
             case PlatformID.Unix:
             case (PlatformID)6: // MacOSX:
-                int errorNo = ML_sys_mkdir(DirName, 0x7 << 6);
+                int errorNo = ML_sys_mkdir(Dirname, 0x7 << 6);
                 if (errorNo == 0)
                 {
-                    ErrorMessage = string.Empty;
+                    Message = string.Empty;
                     Okay = mr_bool.YES;
+                    Retry = mr_bool.NO;
                 }
                 else
                 {
-                    ErrorMessage = string.Format(
+                    Message = string.Format(
                         ""Creating directory {0} failed with: {1:X}"",
-                            DirName, errorNo);
+                            Dirname, errorNo);
                     Okay = mr_bool.NO;
+                    // We cannot detect a collision easily so we always retry.
+                    Retry = mr_bool.YES;
                 }
                 break;
 #endif
 
             default:
                 Okay = mr_bool.NO;
-                ErrorMessage =
+                Retry = mr_bool.NO;
+                Message =
                     ""Changing folder permissions is not supported for: "" +
                     Environment.OSVersion;
                 break;
@@ -10828,49 +10875,307 @@ import java.util.Random;
     }
     catch (System.Exception e)
     {
-        DirName = string.Empty;
         Okay = mr_bool.NO;
-        ErrorMessage = e.Message;
-    }
-}").
-
-:- pragma foreign_proc("Java",
-    do_make_temp_directory(Dir::in, Prefix::in, Suffix::in, _Sep::in,
-        DirName::out, Okay::out, ErrorMessage::out, _IO0::di, _IO::uo),
-    [will_not_call_mercury, promise_pure, tabled_for_io, thread_safe,
-        may_not_duplicate],
-"
-    File    new_dir;
-
-    if (Prefix.length() > 5) {
-        // The documentation for io.make_temp says that we should only use
-        // the first five characters of Prefix.
-        Prefix = Prefix.substring(0, 5);
-    }
-
-    new_dir = new File(new File(Dir), makeTempName(Prefix, Suffix));
-    if (new_dir.mkdir()) {
-        DirName = new_dir.getAbsolutePath();
-        Okay = bool.YES;
-        ErrorMessage = """";
-    } else {
-        DirName = """";
-        Okay = bool.NO;
-        ErrorMessage = ""Coudln't create directory"";
+        Retry = mr_bool.NO;
+        Message = e.Message;
     }
 ").
 
+% :- pragma foreign_decl("C", "
+% #ifdef MR_HAVE_UNISTD_H
+%     #include <unistd.h>
+% #endif
+%     #include <sys/types.h>
+%     #include <sys/stat.h>
+%     #include <fcntl.h>
+% 
+%     #define ML_MAX_TEMPNAME_TRIES   (6 * 4)
+% 
+%     extern long ML_io_tempnam_counter;
+% ").
+% 
+% :- pragma foreign_code("C", "
+%     long    ML_io_tempnam_counter = 0;
+% ").
+% 
+% :- pragma foreign_proc("C",
+%     do_make_temp(Dir::in, Prefix::in, Suffix::in, Sep::in, FileName::out,
+%         Okay::out, ErrorMessage::out, _IO0::di, _IO::uo),
+%     [will_not_call_mercury, promise_pure, tabled_for_io,
+%         does_not_affect_liveness],
+% "
+% #ifdef MR_HAVE_MKSTEMP
+%     int err, fd;
+% 
+%     FileName = MR_make_string(MR_ALLOC_ID, ""%s%s%.5sXXXXXX%s"",
+%         Dir, Sep, Prefix, Suffix);
+%     fd = mkstemp(FileName);
+%     if (fd == -1) {
+%         ML_maybe_make_err_msg(MR_TRUE, errno,
+%             ""error opening temporary file: "", MR_ALLOC_ID,
+%             ErrorMessage);
+%         Okay = MR_NO;
+%     } else {
+%         do {
+%             err = close(fd);
+%         } while (err == -1 && MR_is_eintr(errno));
+%         ML_maybe_make_err_msg(err, errno,
+%             ""error closing temporary file: "", MR_ALLOC_ID,
+%             ErrorMessage);
+%         Okay = err == 0 ? MR_YES : MR_NO;
+%     }
+% #else
+%     /*
+%     ** Constructs a temporary name by concatenating Dir, `/', the first 5 chars
+%     ** of Prefix, six hex digits, and Suffix. The six digit hex number is
+%     ** generated by starting with the pid of this process.  Uses
+%     ** `open(..., O_CREATE | O_EXCL, ...)' to create the file, checking that
+%     ** there was no existing file with that name.
+%     */
+%     int     len, err, fd, num_tries;
+%     char    countstr[256];
+%     MR_Word filename_word;
+%     int     flags;
+% 
+%     len = strlen(Dir) + 1 + 5 + 6 + strlen(Suffix) + 1;
+%     /* Dir + / + Prefix + counter + Suffix + \\0 */
+%     MR_offset_incr_hp_atomic_msg(filename_word, 0,
+%         (len + sizeof(MR_Word)) / sizeof(MR_Word),
+%         MR_ALLOC_ID, ""string.string/0"");
+%     FileName = (MR_String) filename_word;
+%     if (ML_io_tempnam_counter == 0) {
+%         ML_io_tempnam_counter = getpid();
+%     }
+%     num_tries = 0;
+%     do {
+%         sprintf(countstr, ""%06lX"", ML_io_tempnam_counter & 0xffffffL);
+%         strcpy(FileName, Dir);
+%         strcat(FileName, Sep);
+%         strncat(FileName, Prefix, 5);
+%         strncat(FileName, countstr, 6);
+%         strcat(FileName, Suffix);
+%         flags = O_WRONLY | O_CREAT | O_EXCL;
+%         do {
+%             #ifdef MR_WIN32
+%                 fd = _wopen(ML_utf8_to_wide(FileName), flags, 0600);
+%             #else
+%                 fd = open(FileName, flags, 0600);
+%             #endif
+%         } while (fd == -1 && MR_is_eintr(errno));
+%         num_tries++;
+%         ML_io_tempnam_counter += (1 << num_tries);
+%     } while (fd == -1 && errno == EEXIST &&
+%         num_tries < ML_MAX_TEMPNAME_TRIES);
+%     if (fd == -1) {
+%         ML_maybe_make_err_msg(MR_TRUE, errno,
+%             ""error opening temporary file: "", MR_ALLOC_ID,
+%             ErrorMessage);
+%         Okay = MR_NO;
+%     }  else {
+%         do {
+%             err = close(fd);
+%         } while (err == -1 && MR_is_eintr(errno));
+%         ML_maybe_make_err_msg(err, errno,
+%             ""error closing temporary file: "", MR_ALLOC_ID,
+%             ErrorMessage);
+%         Okay = err == 0 ? MR_YES : MR_NO;
+%     }
+% #endif
+% ").
+% 
+% :- pragma foreign_proc("C#",
+%     do_make_temp(_Dir::in, _Prefix::in, _Suffix::in, _Sep::in, FileName::out,
+%         Okay::out, ErrorMessage::out, _IO0::di, _IO::uo),
+%     [will_not_call_mercury, promise_pure, tabled_for_io, thread_safe],
+% "{
+%     try {
+%         FileName = System.IO.Path.GetTempFileName();
+%         Okay = mr_bool.YES;
+%         ErrorMessage = """";
+%     }
+%     catch (System.Exception e)
+%     {
+%         FileName = """";
+%         Okay = mr_bool.NO;
+%         ErrorMessage = e.Message;
+%     }
+% }").
+% 
+% :- pragma foreign_proc("Java",
+%     do_make_temp(Dir::in, Prefix::in, Suffix::in, _Sep::in, FileName::out,
+%         Okay::out, ErrorMessage::out, _IO0::di, _IO::uo),
+%     [will_not_call_mercury, promise_pure, tabled_for_io, thread_safe,
+%         may_not_duplicate],
+% "
+%     try {
+%         File    new_file;
+% 
+%         if (Prefix.length() > 5) {
+%             // The documentation for io.make_temp says that we should only use
+%             // the first five characters of Prefix.
+%             Prefix = Prefix.substring(0, 5);
+%         }
+% 
+%         new_file = new File(new File(Dir), makeTempName(Prefix, Suffix));
+%         if (new_file.createNewFile()) {
+%             FileName = new_file.getAbsolutePath();
+%             Okay = bool.YES;
+%             ErrorMessage = """";
+%         } else {
+%             FileName = """";
+%             Okay = bool.NO;
+%             ErrorMessage = ""Could not create file"";
+%         }
+%     } catch (IOException e) {
+%         FileName = """";
+%         Okay = bool.NO;
+%         ErrorMessage = e.toString();
+%     }
+% ").
+% 
+% :- pragma foreign_proc("Erlang",
+%     do_make_temp(Dir::in, Prefix::in, Suffix::in, Sep::in, FileName::out,
+%         Okay::out, ErrorMessage::out, _IO0::di, _IO::uo),
+%     [will_not_call_mercury, promise_pure, tabled_for_io,
+%         does_not_affect_liveness],
+% "
+%     DirStr = binary_to_list(Dir),
+%     PrefixStr = binary_to_list(Prefix),
+%     SuffixStr = binary_to_list(Suffix),
+%     SepStr = binary_to_list(Sep),
+% 
+%     % Constructs a temporary name by concatenating Dir, Sep, Prefix
+%     % three hex digits, '.', and 3 more hex digits.
+% 
+%     % XXX we should try to mix in the Erlang process id in case two Erlang
+%     % processes from the same Unix process are trying to create temporary files
+%     % at the same time (it's not as far-fetched as it sounds, e.g. mmc --make)
+% 
+%     MaxTries = 24,
+% 
+%     {A1, A2, A3} = now(),
+%     case string:to_integer(os:getpid()) of
+%         {Pid, []} ->
+%             void;
+%         _ ->
+%             Pid = 0
+%     end,
+%     Seed = {A1 + Pid, A2, A3},
+% 
+%     case
+%         mercury__io:'ML_do_make_temp_2'(DirStr, PrefixStr, SuffixStr, SepStr,
+%             MaxTries, Seed)
+%     of
+%         {ok, FileName0} ->
+%             FileName = list_to_binary(FileName0),
+%             Okay = {yes},
+%             ErrorMessage = <<>>;
+%         {error, Reason} ->
+%             FileName = <<>>,
+%             Okay = {no},
+%             ErrorMessage = list_to_binary(Reason)
+%     end
+% ").
+% 
+% :- pragma foreign_decl("Erlang", local, "
+%     -export(['ML_do_make_temp_2'/6]).
+% ").
+% :- pragma foreign_code("Erlang", "
+%     'ML_do_make_temp_2'(_, _, _, _, 0, _) ->
+%         {error, ""error opening temporary file""};
+%     'ML_do_make_temp_2'(Dir, Prefix, Suffix, Sep, Tries, Seed0) ->
+%         {R1, Seed1} = random:uniform_s(16#1000, Seed0),
+%         {R2, Seed}  = random:uniform_s(16#1000, Seed1),
+%         FileName = lists:flatten(io_lib:format(""~s~s~s~3.16.0B.~3.16.0B~s"",
+%             [Dir, Sep, Prefix, R1, R2, Suffix])),
+%         case filelib:is_file(FileName) of
+%             true ->
+%                 'ML_do_make_temp_2'(Dir, Prefix, Suffix, Sep, Tries - 1, Seed);
+%             false ->
+%                 case file:open(FileName, [write, {encoding, utf8}]) of
+%                     {ok, IoDevice} ->
+%                         case file:close(IoDevice) of
+%                             ok ->
+%                                 {ok, FileName};
+%                             {error, Reason} ->
+%                                 {error, file:format_error(Reason)}
+%                         end;
+%                     {error, _} ->
+%                         'ML_do_make_temp_2'(Dir, Prefix, Suffix, Sep,
+%                             Tries - 1, Seed)
+%                 end
+%         end.
+% ").
+%
+%%-----------------------------------------------------------------------%
+%
+%:- pred do_make_temp_directory(string::in, string::in, string::in, string::in,
+%    string::out, bool::out, string::out, io::di, io::uo) is det.
+%
+%:- pragma foreign_proc("C",
+%    do_make_temp_directory(Dir::in, Prefix::in, Suffix::in, Sep::in,
+%        DirName::out, Okay::out, ErrorMessage::out, _IO0::di, _IO::uo),
+%    [will_not_call_mercury, promise_pure, tabled_for_io,
+%        does_not_affect_liveness],
+%"
+%#ifdef MR_HAVE_MKDTEMP
+%    int err;
+%
+%    DirName = MR_make_string(MR_ALLOC_ID, ""%s%s%.5sXXXXXX%s"",
+%        Dir, Sep, Prefix, Suffix);
+%    DirName = mkdtemp(DirName);
+%    if (DirName == NULL) {
+%        ML_maybe_make_err_msg(MR_TRUE, errno,
+%            ""error creating temporary directory: "", MR_ALLOC_ID,
+%            ErrorMessage);
+%        Okay = MR_NO;
+%    } else {
+%        ErrorMessage = MR_make_string_const("""");
+%        Okay = MR_YES;
+%    }
+%#else
+%    #warning ""Your system does not have mkdtemp""
+%    Okay = MR_NO;
+%    ErrorMessage =
+%        MR_make_string_const(""Your system does not have mkdtemp"");
+%    DirName = MR_make_string_const("""");
+%#endif /* HAVE_MKDTEMP */
+%").
+%
+%
+%:- pragma foreign_proc("Java",
+%    do_make_temp_directory(Dir::in, Prefix::in, Suffix::in, _Sep::in,
+%        DirName::out, Okay::out, ErrorMessage::out, _IO0::di, _IO::uo),
+%    [will_not_call_mercury, promise_pure, tabled_for_io, thread_safe,
+%        may_not_duplicate],
+%"
+%    File    new_dir;
+%
+%    if (Prefix.length() > 5) {
+%        // The documentation for io.make_temp says that we should only use
+%        // the first five characters of Prefix.
+%        Prefix = Prefix.substring(0, 5);
+%    }
+%
+%    new_dir = new File(new File(Dir), makeTempName(Prefix, Suffix));
+%    if (new_dir.mkdir()) {
+%        DirName = new_dir.getAbsolutePath();
+%        Okay = bool.YES;
+%        ErrorMessage = """";
+%    } else {
+%        DirName = """";
+%        Okay = bool.NO;
+%        ErrorMessage = ""Coudln't create directory"";
+%    }
+%").
+%
 %---------------------------------------------------------------------------%
 
 :- pragma foreign_proc("C",
     have_make_temp_directory,
     [will_not_call_mercury, promise_pure, thread_safe],
 "
-#ifdef MR_HAVE_MKDTEMP
     SUCCESS_INDICATOR = MR_TRUE;
-#else
-    SUCCESS_INDICATOR = MR_FALSE;
-#endif
 ").
 
 :- pragma foreign_proc("Java",

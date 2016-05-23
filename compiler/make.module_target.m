@@ -364,7 +364,8 @@ build_target(Globals, CompilationTask, TargetFile, Imports, TouchedTargetFiles,
         % so it can be cleaned up by build_with_check_for_interrupt.
         io.make_temp_file(ArgFileNameResult, !IO),
         (
-            ArgFileNameResult = ok(ArgFileName),
+            ArgFileNameResult = ok(make_temp_result(ArgFileName, ArgFileStream)),
+            close_output(ArgFileStream, !IO),
             MaybeArgFileName = yes(ArgFileName),
             ArgFileNameSuccess = ok
         ;
