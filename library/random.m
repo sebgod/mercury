@@ -51,6 +51,7 @@
 :- module random.
 :- interface.
 
+:- import_module io.
 :- import_module list.
 
 %---------------------------------------------------------------------------%
@@ -64,6 +65,16 @@
     % Creates a supply of random numbers RS using the specified Seed.
     %
 :- pred init(int::in, supply::uo) is det.
+
+    % init(RS, !IO).
+    %
+    % Creates a supply of random numbers seeded based on the current time of
+    % day and the process ID (if known).
+    %
+    % NOTE: This is not suitable for security but is still suitable for some
+    % applications.
+    %
+:- pred init(supply::uo, io::di, io::uo) is det.
 
     % random(Num, !RS).
     %
@@ -130,6 +141,7 @@
 
 :- import_module array.
 :- import_module int.
+:- import_module time.
 
 :- type supply
     --->    rs(int). % I(j)
@@ -140,6 +152,42 @@ params(9301, 49297, 233280).
 
 init(I0, rs(RS)) :-
     copy(I0, RS).
+
+init(RS, !IO) :-
+    get_pid(Pid, !IO),
+    time(Time, !IO),
+    localtime(Time) = TM,
+    TM = tm(Year, Month, Day, Hour, Min, Sec, _, _, _),
+    % For seeding the RNG 31 days in a month is fine.
+    Now = Sec * 60*60*24*31*12 +
+          Min * 60*24*31*12 +
+          Hour * 24*31*12 +
+          Day * 31*12 +
+          Month * 12 +
+          Year,
+    ( if Pid = 0 then
+        Seed = Now
+    else
+        Seed = (Now << 16) \/ Pid
+    ),
+    init(Seed, RS).
+
+:- pred get_pid(int::out, io::di, io::uo) is det.
+
+:- pragma foreign_proc("C",
+    get_pid(PID::out, _IO0::di, _IO::uo),
+    [will_not_call_mercury, promise_pure, thread_safe],
+"
+#if defined (WIN32) && !defined (__CYGWIN32__)
+    PID = GetCurrentProcessId();
+#elif MR_HAVE_GETPID
+    PID = getpid();
+#else
+    PID = 0;
+#endif
+").
+
+get_pid(0, !IO).
 
 random(I, rs(RS0), rs(RS)) :-
     RS0 = I0,

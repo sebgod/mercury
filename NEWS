@@ -336,6 +336,9 @@ Changes to the Mercury standard library:
 
    - is_empty/1
 
+* We have added a new init/3 predicate to the random module.  This predicate
+  seeds the PRNG using the current time and process ID (if known).
+
 Changes to the Mercury compiler:
 
 * We have added a new option --warn-dead-preds. While the existing option
