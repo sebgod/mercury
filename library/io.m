@@ -10901,7 +10901,7 @@ get_temp_directory(Dir, !IO) :-
     % temporary files.
     system_temp_dir(Dir0, OK, !IO),
     ( if OK = 1 then
-        Dir = Dir0
+        Dir1 = Dir0
     else
         % Either this is not a Java or C# grade or the Java or C# backend
         % couldn't determine the temporary directory.
@@ -10911,16 +10911,17 @@ get_temp_directory(Dir, !IO) :-
         Var = ( if dir.use_windows_paths then "TMP" else "TMPDIR" ),
         get_environment_var(Var, Result, !IO),
         (
-            Result = yes(Dir)
+            Result = yes(Dir1)
         ;
             Result = no,
             ( if dir.use_windows_paths then
-                Dir = dir.this_directory
+                Dir1 = dir.this_directory
             else
-                Dir = "/tmp"
+                Dir1 = "/tmp"
             )
         )
-    ).
+    ),
+    Dir = remove_directory_suffix(Dir1).
 
 :- pred system_temp_dir(string::out, int::out, io::di, io::uo) is det.
 
@@ -10953,6 +10954,14 @@ get_temp_directory(Dir, !IO) :-
 ").
 
 system_temp_dir("", 0, !IO).
+
+:- func remove_directory_suffix(string) = string.
+
+remove_directory_suffix(Dir0) = Dir :-
+    NumTrim = suffix_length((pred(C::in) is semidet :-
+            is_directory_separator(C)
+        ), Dir0),
+    Dir = left(Dir0, length(Dir0) - NumTrim).
 
 %---------------------------------------------------------------------------%
 
