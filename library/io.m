@@ -6759,6 +6759,7 @@ public static ThreadLocal<Exception> MR_io_exception =
     %
 -export([
     mercury_open_stream/2,
+    mercury_open_stream_temp/1,
     mercury_close_stream/1,
     mercury_getc/1,
     mercury_read_string_to_eof/1,
@@ -6811,6 +6812,21 @@ mercury_start_file_server(ParentPid, FileName, Mode) ->
         [$a | _] ->
             ModeList = [append, delayed_write, binary, Encoding]
     end,
+    case file:open(FileName, ModeList) of
+        {ok, IoDevice} ->
+            StreamId = make_ref(),
+            Stream = {'ML_stream', StreamId, self()},
+            ParentPid ! {self(), open_ack, {ok, Stream}},
+            mercury_file_server(IoDevice, 1, [])
+    ;
+        {error, Reason} ->
+            ParentPid ! {self(), open_ack, {error, Reason}}
+    end.
+
+mercury_start_file_server_temp(ParentPid, FileName) ->
+    Encoding = {encoding, utf8},
+    % XXX
+    ModeList = [write, delayed_write, binary, Encoding];
     case file:open(FileName, ModeList) of
         {ok, IoDevice} ->
             StreamId = make_ref(),
@@ -6994,6 +7010,17 @@ mercury_open_stream(FileName, Mode) ->
     Pid = spawn(fun() ->
         % Raw streams can only be used by the process which opened it.
         mercury_start_file_server(ParentPid, FileName, Mode)
+    end),
+    receive
+        {Pid, open_ack, Result} ->
+            Result
+    end.
+
+mercury_open_stream_temp(FileName) ->
+    ParentPid = self(),
+    Pid = spawn(fun() ->
+        % Raw streams can only be used by the process which opened it.
+        mercury_start_file_server_temp(ParentPid, FileName)
     end),
     receive
         {Pid, open_ack, Result} ->
@@ -10593,6 +10620,7 @@ import java.io.FileOutputStream;
     [can_pass_as_mercury_type, stable]).
 :- pragma foreign_type("Java", temp_file, "FileOutputStream").
 :- pragma foreign_type("C#", temp_file, "FileStream").
+:- pragma foreign_type("Erlang", temp_file, "").
 
 :- pred open_create_temp(string::in, bool::out, temp_file::out, bool::out,
     string::out, io::di, io::uo) is det.
@@ -10671,6 +10699,29 @@ import java.io.FileOutputStream;
         Retry = mr_bool.NO;
         Message = e.Message;
     }
+").
+
+:- pragma foreign_proc("Erlang",
+    open_create_temp(Filename::in, Okay::out, Stream::out, Retry::out,
+        Message::out, _IO0::di, _IO::uo),
+    [will_not_call_mercury, promise_pure, thread_safe, tabled_for_io],
+"
+    FilenameStr = binary_to_list(Filename),
+
+    case filelib:is_file(FilenameStr) of
+        true ->
+            Okay = {no},
+            Stream = null,
+            Retry = {yes},
+            Message = <<File already exists>>
+    ;
+        false ->
+            case mercury__io.mercury_open_stream_temp(FilenameStr) of
+                {ok, Stream} ->
+            ;
+                {error, Reason} ->
+            end.
+    end.
 ").
 
 :- pred close_fd(temp_file::in, io::di, io::uo) is det.
