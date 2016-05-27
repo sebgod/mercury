@@ -10507,16 +10507,15 @@ make_temp_directory(Result, !IO) :-
     make_temp_directory(Dir, "mtmp", "", Result, !IO).
 
 make_temp_directory(Dir, Prefix, Suffix, Result, !IO) :-
-    make_temp_loop(do_make_temp_directory(Dir), make_temp_tries, Dir, Prefix,
+    make_temp_loop(do_make_temp_directory, make_temp_tries, Dir, Prefix,
         Suffix, Result, !IO).
 
-:- pred do_make_temp_directory(string::in, string::in,
+:- pred do_make_temp_directory(string::in,
     okay_retry_or_error(string)::out, io::di, io::uo) is det.
 
-do_make_temp_directory(Dir, Dirname, Result, !IO) :-
+do_make_temp_directory(Dirname, Result, !IO) :-
     % Try to open and create the file.
-    % The dir argument is only used on C# backends.
-    mkdir_temp(Dir, Dirname, Okay, Retry, Message, !IO),
+    mkdir_temp(Dirname, Okay, Retry, Message, !IO),
     (
         Okay = yes,
         Result = ok(Dirname)
@@ -10678,8 +10677,7 @@ import java.io.FileOutputStream;
         Message::out, _IO0::di, _IO::uo),
     [will_not_call_mercury, promise_pure, thread_safe, tabled_for_io],
 "
-	try {
-        // XXX: is FileShare.None correct?
+    try {
         Stream = new FileStream(Filename, FileMode.CreateNew, FileAccess.Write,
             FileShare.None);
         Okay = mr_bool.YES;
@@ -10688,6 +10686,8 @@ import java.io.FileOutputStream;
     }
     catch (IOException e) {
         // This is the exception that is thrown if the file already exists.
+        // XXX [sg]: This is not exclusive, so if there is another cause,
+        // will this create an endless loop?
         Okay = mr_bool.NO;
         Stream = null;
         Retry = mr_bool.YES;
@@ -10807,16 +10807,19 @@ import java.io.FileOutputStream;
     }
 ").
 
-:- pred mkdir_temp(string::in, string::in, bool::out, bool::out, string::out,
+:- pred mkdir_temp(string::in, bool::out, bool::out, string::out,
     io::di, io::uo) is det.
 
 :- pragma foreign_proc("C",
-    mkdir_temp(_Dir::in, Dirname::in, Okay::out, Retry::out, Message::out,
+    mkdir_temp(Dirname::in, Okay::out, Retry::out, Message::out,
         _IO0::di, _IO::uo),
     [will_not_call_mercury, promise_pure, thread_safe, tabled_for_io],
 "
     int res;
 
+    /* XXX [sg]: mkdir(dir, mode) is not defined for msys(2)/win32
+     * This should use the CreateDirectory call (just like for .NET/win32)
+     */
     res = mkdir(Dirname, S_IRUSR | S_IWUSR | S_IXUSR);
     ML_maybe_make_err_msg((res == -1) && (errno != EEXIST), errno,
         ""Create temporary directory failed: "", MR_ALLOC_ID, Message);
@@ -10834,7 +10837,7 @@ import java.io.FileOutputStream;
 ").
 
 :- pragma foreign_proc("Java",
-    mkdir_temp(_Dir::in, Dirname::in, Okay::out, Retry::out, Message::out,
+    mkdir_temp(Dirname::in, Okay::out, Retry::out, Message::out,
         _IO0::di, _IO::uo),
     [will_not_call_mercury, promise_pure, thread_safe, tabled_for_io],
 "
@@ -10861,18 +10864,23 @@ import java.io.FileOutputStream;
 ").
 
 :- pragma foreign_proc("C#",
-    mkdir_temp(Dir::in, Dirname::in, Okay::out, Retry::out, Message::out,
+    mkdir_temp(Dirname::in, Okay::out, Retry::out, Message::out,
         _IO0::di, _IO::uo),
     [will_not_call_mercury, promise_pure, tabled_for_io, thread_safe],
 "
     try
     {
+        string parentDir = Path.GetDirectoryName(
+            Dirname.TrimEnd(
+                Path.DirectorySeparatorChar,
+                Path.AltDirectorySeparatorChar));
+
         switch (Environment.OSVersion.Platform)
         {
             case PlatformID.Win32NT:
                 // obtain the owner of the temporary directory
                 IdentityReference tempInfo =
-                    new DirectoryInfo(Dir)
+                    new DirectoryInfo(parentDir)
                         .GetAccessControl(AccessControlSections.Owner)
                         .GetOwner(typeof(SecurityIdentifier));
 
