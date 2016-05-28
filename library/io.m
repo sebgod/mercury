@@ -10817,23 +10817,31 @@ import java.io.FileOutputStream;
 "
     int res;
 
-    /* XXX [sg]: mkdir(dir, mode) is not defined for msys(2)/win32
-     * This should use the CreateDirectory call (just like for .NET/win32)
-     */
-    res = mkdir(Dirname, S_IRUSR | S_IWUSR | S_IXUSR);
-    ML_maybe_make_err_msg((res == -1) && (errno != EEXIST), errno,
-        ""Create temporary directory failed: "", MR_ALLOC_ID, Message);
-    if (res == -1) {
-        Okay = MR_NO;
-        if (errno == EEXIST) {
-            Retry = MR_YES;
+    #ifdef MR_WIN32
+        int errno;
+        res = CreateDirectoryW(ML_utf8_to_wide(Dirname), NULL);
+        Okay = res == 0 ? MR_YES : MR_NO;
+        ML_maybe_make_err_msg((res != 0) &&
+            ((errno = GetLastError()) != ERROR_ALREADY_EXISTS),
+            errno,
+            ""Create temporary directory failed: "", MR_ALLOC_ID, Message);
+        Retry = errno = ERROR_ALREADY_EXISTS ? MR_YES : MR_NO;
+    #else
+        res = mkdir(Dirname, S_IRUSR | S_IWUSR | S_IXUSR);
+        ML_maybe_make_err_msg((res == -1) && (errno != EEXIST), errno,
+            ""Create temporary directory failed: "", MR_ALLOC_ID, Message);
+        if (res == -1) {
+            Okay = MR_NO;
+            if (errno == EEXIST) {
+                Retry = MR_YES;
+            } else {
+                Retry = MR_NO;
+            }
         } else {
+            Okay = MR_YES;
             Retry = MR_NO;
         }
-    } else {
-        Okay = MR_YES;
-        Retry = MR_NO;
-    }
+    #endif /*!MR_WIN32*/
 ").
 
 :- pragma foreign_proc("Java",
