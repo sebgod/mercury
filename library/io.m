@@ -10904,8 +10904,7 @@ import java.io.FileOutputStream;
 #if __MonoCS__
             case PlatformID.Unix:
             case (PlatformID)6: // MacOSX:
-                int errorNo = ML_sys_mkdir(Dirname, 0x7 << 6);
-                if (errorNo == 0)
+                if (ML_sys_mkdir(Dirname, 0x7 << 6) == 0)
                 {
                     Message = string.Empty;
                     Okay = mr_bool.YES;
@@ -10913,12 +10912,13 @@ import java.io.FileOutputStream;
                 }
                 else
                 {
+                    const int EEXIST = 17;
+                    int errorNo = Marshal.GetLastWin32Error();
                     Message = string.Format(
                         ""Creating directory {0} failed with: {1:X}"",
                             Dirname, errorNo);
                     Okay = mr_bool.NO;
-                    // We cannot detect a collision easily so we always retry.
-                    Retry = mr_bool.YES;
+                    Retry = EEXIST ? mr_bool.YES : mr_bool.NO;
                 }
                 break;
 #endif
