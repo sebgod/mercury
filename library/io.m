@@ -10581,7 +10581,8 @@ make_temp_loop(DoMakeTemp, Tries, Dir, Prefix, Suffix, Result, !IO) :-
         Result = error(make_io_error("Could not create unique file name"))
     ).
 
-:- pred get_rand_chars(int::in, list(char)::out, supply::in, supply::out) is det.
+:- pred get_rand_chars(int::in, list(char)::out, supply::in, supply::out)
+    is det.
 
 get_rand_chars(Num, Chars, !Supply) :-
     ( if Num < 1 then
