@@ -10555,7 +10555,7 @@ make_temp_loop(DoMakeTemp, Tries, Dir, Prefix, Suffix, Result, !IO) :-
         get_rand_temp_file(MaybeSupply, !IO),
         (
             MaybeSupply = no,
-            random.init(Supply0, !IO)
+            random_init(Supply0, !IO)
         ;
             MaybeSupply = yes(Supply0)
         ),
@@ -10593,6 +10593,44 @@ get_rand_chars(Num, Chars, !Supply) :-
         Char = det_base_int_to_digit(36, Rand),
         Chars = [Char | Chars0]
     ).
+
+:- pred random_init(random.supply::out, io::di, io::uo) is det.
+
+random_init(RS, !IO) :-
+    rand_get_pid(Pid, !IO),
+    time(Time, !IO),
+    localtime(Time) = TM,
+    TM = tm(Year, Month, Day, Hour, Min, Sec, _, _, _),
+    % For seeding the RNG 31 days in a month is fine.
+    Now = Sec * 60*60*24*31*12 +
+          Min * 60*24*31*12 +
+          Hour * 24*31*12 +
+          Day * 31*12 +
+          Month * 12 +
+          Year,
+    ( if Pid = 0 then
+        Seed = Now
+    else
+        Seed = (Now << 16) \/ Pid
+    ),
+    init(Seed, RS).
+
+:- pred rand_get_pid(int::out, io::di, io::uo) is det.
+
+:- pragma foreign_proc("C",
+    rand_get_pid(PID::out, _IO0::di, _IO::uo),
+    [will_not_call_mercury, promise_pure, thread_safe],
+"
+#if defined (WIN32) && !defined (__CYGWIN32__)
+    PID = GetCurrentProcessId();
+#elif MR_HAVE_GETPID
+    PID = getpid();
+#else
+    PID = 0;
+#endif
+").
+
+rand_get_pid(0, !IO).
 
 %-----------------------------------------------------------------------%
 
