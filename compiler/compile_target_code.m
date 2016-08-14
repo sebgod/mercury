@@ -1880,14 +1880,8 @@ link_exe_or_shared_lib(Globals, ErrorStream, LinkTargetType, ModuleName,
         UseThreadLibs = yes,
         globals.lookup_string_option(Globals, ThreadFlagsOpt, ThreadOpts),
 
-        % Determine which options are needed to link to libhwloc, if libhwloc
-        % is used at all.
-        globals.lookup_bool_option(Globals, highlevel_code, HighLevelCode),
-        (
-            HighLevelCode = yes,
-            HwlocOpts = ""
-        ;
-            HighLevelCode = no,
+        % Determine which options are needed to link to libhwloc, if
+        % libhwloc is not used then the string option will be empty.
             ( if Linkage = "shared" then
                 HwlocFlagsOpt = hwloc_libs
             else if Linkage = "static" then
@@ -1896,7 +1890,6 @@ link_exe_or_shared_lib(Globals, ErrorStream, LinkTargetType, ModuleName,
                 unexpected($module, $pred, "Invalid linkage")
             ),
             globals.lookup_string_option(Globals, HwlocFlagsOpt, HwlocOpts)
-        )
     ;
         UseThreadLibs = no,
         ThreadOpts = "",

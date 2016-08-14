@@ -104,7 +104,7 @@ Changes to the Mercury language:
 
   `require_switch_arms_<determinism> [Var] Goal' tells the compiler to require
   `Goal' to be a switch on `Var' in which all the switch arms have determinisms
-  at least as tight as <determininism>, and to generate error messages
+  at least as tight as <determinism>, and to generate error messages
   for any violations of this requirement.
 
 * We have changed the meaning of require_complete_switch scopes slightly:
@@ -169,6 +169,8 @@ Changes to the Mercury standard library:
 * We have added thread.spawn_native/4 to dedicate an OS thread to a Mercury
   thread. thread.spawn/4 was added as well.
 
+* We have added the function from_reverse_list/1 to the version_array module.
+
 * We have added thread.num_processors/3 which returns the number of
   processors available for parallel work.
 
@@ -196,7 +198,7 @@ Changes to the Mercury standard library:
     - is_leading_surrogate/1, is_trailing_surrogate/1
 
   The following predicates in the char module have been deprecated and will
-  either be removed or have their semantics changed in a future release.
+  either be removed or have their semantics changed in a future release:
 
     - is_hex_digit/2
     - int_to_hex_char/2
@@ -212,6 +214,8 @@ Changes to the Mercury standard library:
 
 * string.base_digit_to_int/3 and string.det_base_digit_to_int/2 now check
   for overflow and underflow in all bases, not only base 10.
+
+* We have reduced the memory allocated by string.to_lower and string.to_upper.
 
 * The following classification predicates have been added to the float module:
 
@@ -254,6 +258,7 @@ Changes to the Mercury standard library:
    - from_utf8_code_unit_list/2
    - from_utf16_code_unit_list/2
    - det_remove_prefix/3
+   - compare_ignore_case_ascii/3
 
 * The following predicates have been added to the map module:
 
@@ -266,9 +271,11 @@ Changes to the Mercury standard library:
 
 * We have a added a new type, maybe_errors, to the maybe module.
 
-  The following predicate has been added to the maybe module:
+  The following predicate and function have been added to the maybe module:
 
    - fold2_maybe/6
+   - maybe_default/2
+   - pred_to_maybe/1
 
 * The following predicates and functions have been added to the calendar
   module:
@@ -309,6 +316,13 @@ Changes to the Mercury standard library:
 * The takewhile/4 predicate has been deprecated in the list module,
   take_while/4 can be used instead.
 
+* The take/3 and drop/3 predicates in the list module have been modified
+  so that they fail if their first argument is less than zero.
+
+* The split_upto/4 and take_upto/3 predicates and take_upto/2 function
+  in the list module have been modified so that they throw an exception
+  if their first argument is negative.
+
 * The following predicate and function in the builtin module have been
   deprecated and will be removed in a future release:
 
@@ -327,14 +341,54 @@ Changes to the Mercury standard library:
   Existing code that uses these modes should replace their use with `in'
   or `out' respectively.
 
-* The following functions have been added to the cord module
+* The following predicates and functions have been added to the cord module:
 
    - to_list/1     (synonym for the existing list/1 function)
    - to_rev_list/1 (synonym for the existing rev_list/1 function)
+   - cons/3
+   - snoc/3
 
 * The following function has been added to the array2d module
 
    - is_empty/1
+
+* The following predicates have been added to the time module:
+
+   - localtime/4
+   - mktime/4
+
+  The following functions in the time module have been deprecated:
+
+   - localtime/1
+   - mktime/1
+   - ctime/1
+
+* The following predicates have been added to the rbtree module:
+
+   - foldl_values/4
+   - foldl2_values/6
+
+* The following predicates have been added to the hash_table module:
+
+   - fold2/6
+   - fold3/8
+
+* We have added the predicate svremove/4 to the assoc_list module.
+  This like the remove/4 predicate but with its arguments are in
+  an order more conducive to the use of state variable notation.
+
+* We have made several changes to the pretty_printer module:
+
+  - The type formatter_limit has been renamed to func_symbol_limit,
+    since this better reflects the type's purpose.
+  - We have replaced the set_formatter function with a predicate
+    of the same name, since this allows the use of state variable notation
+    when setting up more than one type-specific formatter,
+  - We have renamed the write_doc_to_stream predicate as put_doc,
+    to better fit in with the names other predicates that operate on
+    values of the stream.writer typeclass, and changed its interface
+    to group the prettyprinter parameters together in a value of the type
+    that was designed for this purpose.
 
 Changes to the Mercury compiler:
 

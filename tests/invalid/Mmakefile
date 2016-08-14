@@ -48,14 +48,17 @@ SINGLEMODULE= \
 	assert_in_interface \
 	bad_consider_used \
 	bad_detism \
+	bad_detism_category \
 	bad_end_module \
+	bad_finalise_decl \
 	bad_foreign_code \
 	bad_foreign_decl \
 	bad_foreign_enum \
 	bad_foreign_export \
 	bad_foreign_export_enum \
 	bad_foreign_import_module \
-	bad_finalise_decl \
+	bad_foreign_proc \
+	bad_foreign_type \
 	bad_initialise_decl \
 	bad_inst_for_type \
 	bad_instance \
@@ -63,6 +66,7 @@ SINGLEMODULE= \
 	bad_module_name \
 	bad_mutable \
 	bad_sv_unify_msg \
+	bad_with_inst \
 	bigtest \
 	bind_in_negated \
 	bind_var_errors \
@@ -72,8 +76,10 @@ SINGLEMODULE= \
 	bug117 \
 	bug150 \
 	bug17 \
+	bug184 \
 	bug191 \
 	bug197 \
+	bug214 \
 	bug238 \
 	bug257 \
 	bug278 \
@@ -320,6 +326,7 @@ SINGLEMODULE= \
 	where_direct_arg \
 	where_direct_arg2 \
 	with_type \
+	wrong_arity_function \
 	wrong_type_arity
 
 # The following require that num_tag_bits >= 1
@@ -332,7 +339,10 @@ TRAILED_MODULES = \
 
 # The following require that the back-end support the C interface
 C_INTERFACE_MODULES = \
+	fe_unmapped_nonverbose \
+	fe_unmapped_verbose \
 	foreign_decl_line_number \
+	pragma_qual_error \
 	trace_goal_env
 
 # The following require that the compiler not ignore `pragma type_spec'

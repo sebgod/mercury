@@ -456,6 +456,16 @@
     %
 :- pred contains_char(string::in, char::in) is semidet.
 
+    % compare_ignore_case_ascii(Res, X, Y):
+    %
+    % Compare two strings by code point order, ignoring the case of letters
+    % (A-Z, a-z) in the ASCII range.
+    % Equivalent to `compare(Res, to_lower(X), to_lower(Y))'
+    % but more efficient.
+    %
+:- pred compare_ignore_case_ascii(comparison_result::uo,
+    string::in, string::in) is det.
+
     % prefix_length(Pred, String):
     %
     % The length (in code units) of the maximal prefix of `String' consisting
@@ -768,19 +778,33 @@
 %
 
     % Convert the first character (if any) of a string to uppercase.
-    % Note that this only converts unaccented Latin letters.
+    % Only letters (a-z) in the ASCII range are converted.
+    %
+    % This function transforms the initial code point of a string,
+    % whether or not the code point occurs as part of a combining sequence.
     %
 :- func capitalize_first(string) = string.
 :- pred capitalize_first(string::in, string::out) is det.
 
     % Convert the first character (if any) of a string to lowercase.
-    % Note that this only converts unaccented Latin letters.
+    % Only letters (A-Z) in the ASCII range are converted.
+    %
+    % This function transforms the initial code point of a string,
+    % whether or not the code point occurs as part of a combining sequence.
     %
 :- func uncapitalize_first(string) = string.
 :- pred uncapitalize_first(string::in, string::out) is det.
 
     % Converts a string to uppercase.
-    % Note that this only converts unaccented Latin letters.
+    % Only letters (A-Z) in the ASCII range are converted.
+    %
+    % This function transforms each code point individually.
+    % Letters that occur within a combining sequence will be converted,
+    % whereas the precomposed character equivalent to the combining
+    % sequence would not be converted. For example:
+    %
+    %   to_upper("a\u0301") ==> "A\u0301"   % á decomposed
+    %   to_upper("\u00E1")  ==> "\u00E1"    % á precomposed
     %
 :- func to_upper(string::in) = (string::uo) is det.
 :- pred to_upper(string, string).
@@ -788,7 +812,15 @@
 :- mode to_upper(in, in) is semidet.        % implied
 
     % Converts a string to lowercase.
-    % Note that this only converts unaccented Latin letters.
+    % Only letters (a-z) in the ASCII range are converted.
+    %
+    % This function transforms each code point individually.
+    % Letters that occur within a combining sequence will be converted,
+    % whereas the precomposed character equivalent to the combining
+    % sequence would not be converted. For example:
+    %
+    %   to_lower("A\u0301") ==> "a\u0301"   % Á decomposed
+    %   to_lower("\u00C1")  ==> "\u00C1"    % Á precomposed
     %
 :- func to_lower(string::in) = (string::uo) is det.
 :- pred to_lower(string, string).
@@ -3143,6 +3175,42 @@ contains_char(Str, Char, I) :-
 
 %---------------------%
 
+compare_ignore_case_ascii(Res, X, Y) :-
+    compare_ignore_case_ascii_loop(X, Y, 0, Res).
+
+:- pred compare_ignore_case_ascii_loop(string::in, string::in, int::in,
+    comparison_result::uo) is det.
+
+compare_ignore_case_ascii_loop(X, Y, I, Res) :-
+    ( if unsafe_index_next(X, I, IX, CharX) then
+        ( if unsafe_index_next(Y, I, _IY, CharY) then
+            char.to_lower(CharX, LowerCharX),
+            char.to_lower(CharY, LowerCharY),
+            compare(CharRes, LowerCharX, LowerCharY),
+            (
+                CharRes = (=),
+                % CharX = CharY, or both are in the ASCII range.
+                % In either case, we must have IX = IY.
+                compare_ignore_case_ascii_loop(X, Y, IX, Res)
+            ;
+                ( CharRes = (<)
+                ; CharRes = (>)
+                ),
+                Res = CharRes
+            )
+        else
+            % X longer than Y.
+            Res = (>)
+        )
+    else if unsafe_index_next(Y, I, _IY, _CharY) then
+        % X shorter than Y.
+        Res = (<)
+    else
+        Res = (=)
+    ).
+
+%---------------------%
+
 prefix_length(P, S) = Index :-
     prefix_length_loop(P, S, 0, Index).
 
@@ -4574,10 +4642,56 @@ uncapitalize_first(S0, S) :-
         S = S0
     ).
 
+%---------------------%
+
 to_upper(S1) = S2 :-
     to_upper(S1, S2).
 
-to_upper(StrIn, StrOut) :-
+:- pragma promise_equivalent_clauses(to_upper/2).
+
+:- pragma foreign_proc("C",
+    to_upper(StrIn::in, StrOut::uo),
+    [will_not_call_mercury, promise_pure, thread_safe, will_not_modify_trail,
+        does_not_affect_liveness, no_sharing],
+"
+    MR_Integer  i;
+
+    MR_make_aligned_string_copy_msg(StrOut, StrIn, MR_ALLOC_ID);
+
+    for (i = 0; StrOut[i] != '\\0'; i++) {
+        if (StrOut[i] >= 'a' && StrOut[i] <= 'z') {
+            StrOut[i] = StrOut[i] - 'a' + 'A';
+        }
+    }
+").
+:- pragma foreign_proc("C#",
+    to_upper(StrIn::in, StrOut::uo),
+    [will_not_call_mercury, promise_pure, thread_safe, will_not_modify_trail,
+        does_not_affect_liveness, no_sharing],
+"
+    char[] cs = StrIn.ToCharArray();
+    for (int i = 0; i < cs.Length; i++) {
+        if (cs[i] >= 'a' && cs[i] <= 'z') {
+            cs[i] = (char)(cs[i] - 'a' + 'A');
+        }
+    }
+    StrOut = new System.String(cs);
+").
+:- pragma foreign_proc("Java",
+    to_upper(StrIn::in, StrOut::uo),
+    [will_not_call_mercury, promise_pure, thread_safe, will_not_modify_trail,
+        does_not_affect_liveness, no_sharing],
+"
+    char[] cs = StrIn.toCharArray();
+    for (int i = 0; i < cs.length; i++) {
+        if (cs[i] >= 'a' && cs[i] <= 'z') {
+            cs[i] = (char)(cs[i] - 'a' + 'A');
+        }
+    }
+    StrOut = new String(cs);
+").
+
+to_upper(StrIn::in, StrOut::uo) :-
     to_char_list(StrIn, List),
     char_list_to_upper(List, ListUpp),
     from_char_list(ListUpp, StrOut).
@@ -4589,10 +4703,89 @@ char_list_to_upper([X | Xs], [Y | Ys]) :-
     char.to_upper(X, Y),
     char_list_to_upper(Xs, Ys).
 
+to_upper(X::in, Y::in) :-
+    length(X, LenX),
+    length(Y, LenY),
+    ( if LenX = LenY then
+        check_upper_loop(X, Y, 0, LenX)
+    else
+        fail
+    ).
+
+:- pred check_upper_loop(string::in, string::in, int::in, int::in) is semidet.
+
+check_upper_loop(X, Y, Index, End) :-
+    ( if Index = End then
+        true
+    else
+        unsafe_index_code_unit(X, Index, CodeX),
+        unsafe_index_code_unit(Y, Index, CodeY),
+        to_upper_code_unit(CodeX, CodeY),
+        check_upper_loop(X, Y, Index + 1, End)
+    ).
+
+:- pred to_upper_code_unit(int::in, int::out) is det.
+
+to_upper_code_unit(Code0, Code) :-
+    ( if
+        Code0 >= to_int('a'),
+        Code0 =< to_int('z')
+    then
+        Code = Code0 - to_int('a') + to_int('A')
+    else
+        Code = Code0
+    ).
+
+%---------------------%
+
 to_lower(S1) = S2 :-
     to_lower(S1, S2).
 
-to_lower(StrIn, StrOut) :-
+:- pragma promise_equivalent_clauses(to_lower/2).
+
+:- pragma foreign_proc("C",
+    to_lower(StrIn::in, StrOut::uo),
+    [will_not_call_mercury, promise_pure, thread_safe, will_not_modify_trail,
+        does_not_affect_liveness, no_sharing],
+"
+    MR_Integer  i;
+
+    MR_make_aligned_string_copy_msg(StrOut, StrIn, MR_ALLOC_ID);
+
+    for (i = 0; StrOut[i] != '\\0'; i++) {
+        if (StrOut[i] >= 'A' && StrOut[i] <= 'Z') {
+            StrOut[i] = StrOut[i] - 'A' + 'a';
+        }
+    }
+").
+:- pragma foreign_proc("C#",
+    to_lower(StrIn::in, StrOut::uo),
+    [will_not_call_mercury, promise_pure, thread_safe, will_not_modify_trail,
+        does_not_affect_liveness, no_sharing],
+"
+    char[] cs = StrIn.ToCharArray();
+    for (int i = 0; i < cs.Length; i++) {
+        if (cs[i] >= 'A' && cs[i] <= 'Z') {
+            cs[i] = (char)(cs[i] - 'A' + 'a');
+        }
+    }
+    StrOut = new System.String(cs);
+").
+:- pragma foreign_proc("Java",
+    to_lower(StrIn::in, StrOut::uo),
+    [will_not_call_mercury, promise_pure, thread_safe, will_not_modify_trail,
+        does_not_affect_liveness, no_sharing],
+"
+    char[] cs = StrIn.toCharArray();
+    for (int i = 0; i < cs.length; i++) {
+        if (cs[i] >= 'A' && cs[i] <= 'Z') {
+            cs[i] = (char)(cs[i] - 'A' + 'a');
+        }
+    }
+    StrOut = new String(cs);
+").
+
+to_lower(StrIn::in, StrOut::uo) :-
     to_char_list(StrIn, List),
     char_list_to_lower(List, ListLow),
     from_char_list(ListLow, StrOut).
@@ -4603,6 +4796,39 @@ char_list_to_lower([], []).
 char_list_to_lower([X | Xs], [Y | Ys]) :-
     char.to_lower(X, Y),
     char_list_to_lower(Xs, Ys).
+
+to_lower(X::in, Y::in) :-
+    length(X, LenX),
+    length(Y, LenY),
+    ( if LenX = LenY then
+        check_lower_loop(X, Y, 0, LenX)
+    else
+        fail
+    ).
+
+:- pred check_lower_loop(string::in, string::in, int::in, int::in) is semidet.
+
+check_lower_loop(X, Y, Index, End) :-
+    ( if Index = End then
+        true
+    else
+        unsafe_index_code_unit(X, Index, CodeX),
+        unsafe_index_code_unit(Y, Index, CodeY),
+        to_lower_code_unit(CodeX, CodeY),
+        check_lower_loop(X, Y, Index + 1, End)
+    ).
+
+:- pred to_lower_code_unit(int::in, int::out) is det.
+
+to_lower_code_unit(Code0, Code) :-
+    ( if
+        Code0 >= to_int('A'),
+        Code0 =< to_int('Z')
+    then
+        Code = Code0 - to_int('A') + to_int('a')
+    else
+        Code = Code0
+    ).
 
 %---------------------%
 
@@ -5173,12 +5399,12 @@ base_string_to_int(Base, String, Int) :-
     End = count_code_units(String),
     ( if Char = ('-') then
         End > 1,
-        foldl_between(accumulate_negative_int(Base), String, 1, End, 0, Int)
+        foldl_between(base_negative_accumulator(Base), String, 1, End, 0, Int)
     else if Char = ('+') then
         End > 1,
-        foldl_between(accumulate_int(Base), String, 1, End, 0, Int)
+        foldl_between(base_accumulator(Base), String, 1, End, 0, Int)
     else
-        foldl_between(accumulate_int(Base), String, 0, End, 0, Int)
+        foldl_between(base_accumulator(Base), String, 0, End, 0, Int)
     ).
 
 det_base_string_to_int(Base, S) = N :-
@@ -5186,6 +5412,27 @@ det_base_string_to_int(Base, S) = N :-
         N = N0
     else
         unexpected($pred, "conversion failed")
+    ).
+
+:- func base_accumulator(int) = pred(char, int, int).
+:- mode base_accumulator(in) = out(pred(in, in, out) is semidet) is det.
+
+base_accumulator(Base) = Pred :-
+    % Avoid allocating a closure for the common bases. A more general, but
+    % finicky, way to avoid the allocation is to inline foldl_between so that
+    % the higher-order calls in base_string_to_int can be specialised.
+    % The redundant closures will also need to be deleted by unused argument
+    % elimination.
+    ( if Base = 10 then
+        Pred = accumulate_int(10)
+    else if Base = 16 then
+        Pred = accumulate_int(16)
+    else if Base = 8 then
+        Pred = accumulate_int(8)
+    else if Base = 2 then
+        Pred = accumulate_int(2)
+    else
+        Pred = accumulate_int(Base)
     ).
 
 :- pred accumulate_int(int::in, char::in, int::in, int::out) is semidet.
@@ -5196,6 +5443,24 @@ accumulate_int(Base, Char, N0, N) :-
     % Fail on overflow.
     % XXX depends on undefined behaviour
     N0 =< N.
+
+:- func base_negative_accumulator(int) = pred(char, int, int).
+:- mode base_negative_accumulator(in) = out(pred(in, in, out) is semidet)
+    is det.
+
+base_negative_accumulator(Base) = Pred :-
+    % Avoid allocating a closure for the common bases.
+    ( if Base = 10 then
+        Pred = accumulate_negative_int(10)
+    else if Base = 16 then
+        Pred = accumulate_negative_int(16)
+    else if Base = 8 then
+        Pred = accumulate_negative_int(8)
+    else if Base = 2 then
+        Pred = accumulate_negative_int(2)
+    else
+        Pred = accumulate_negative_int(Base)
+    ).
 
 :- pred accumulate_negative_int(int::in, char::in,
     int::in, int::out) is semidet.

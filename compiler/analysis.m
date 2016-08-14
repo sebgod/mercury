@@ -48,7 +48,9 @@
 
     % Describe the analyses which can be performed by a compiler.
     %
-    func analyses(Compiler, analysis_name) = analysis_type is semidet,
+    pred analyses(Compiler, analysis_name, analysis_type),
+    mode analyses(in, in, out) is semidet,
+    mode analyses(in, out, out) is multi,
 
     % module_name_to_read_file_name(Compiler, Globals, ModuleName, Ext,
     %   MaybeFileName)

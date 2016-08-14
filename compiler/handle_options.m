@@ -78,7 +78,6 @@
 :- import_module mdbcomp.feedback.
 
 :- import_module bool.
-:- import_module char.
 :- import_module dir.
 :- import_module getopt_io.
 :- import_module int.
@@ -746,8 +745,8 @@ convert_options_to_globals(OptionTable0, OpMode, Target,
         NumTagBits1 = NumTagBits0
     ),
 
-    % If --num-tag-bits negative or unspecified, issue a warning
-    % and assume --num-tag-bits 0.
+    % If --num-tag-bits is negative (which may or may not be its default
+    % value of -1), issue a warning and assume --num-tag-bits 0.
     ( if NumTagBits1 < 0 then
         NumTagBits = 0,
         NumTagBitsSpec =
