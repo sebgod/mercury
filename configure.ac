@@ -1043,25 +1043,6 @@ fi
 AC_SUBST(CFLAGS_FOR_ERRMSG_FILTER)
 
 #-----------------------------------------------------------------------------#
-# Make sure we search /usr/local/include and /usr/local/lib for
-# header files and libraries. GNU C normally searches /usr/local/include
-# by default, but (inconsistently) on some systems, such as Solaris,
-# it does _not_ search /usr/local/lib.
-# The user might also be using a different C compiler that
-# doesn't search either of those by default.
-MERCURY_CHECK_LOCAL_C_INCL_DIRS
-CPPFLAGS="$ALL_LOCAL_C_INCL_DIRS $CPPFLAGS"
-MERCURY_CHECK_LOCAL_C_LIB_DIRS
-for dir in $ALL_LOCAL_C_LIB_DIRS kludge_for_broken_shells
-do
-    if test "$dir" != "kludge_for_broken_shells"; then
-        LIBS="-L$dir $LIBS"
-    fi
-done
-
-AC_PROG_CPP
-
-#-----------------------------------------------------------------------------#
 
 AC_PROG_EGREP
 AC_MSG_CHECKING([for use of a Microsoft C compiler])
@@ -1106,15 +1087,15 @@ if test "$ac_microsoft" = "yes" ; then
     # Use MS-style file names and command-line options
     OBJ_SUFFIX="obj"
     LIB_SUFFIX="lib"
-    LIB_PREFIX="lib"
+    LIB_PREFIX=""
     LIB_LIBPATH="-LIBPATH:"
-    LINK_LIB=""
+    LINK_LIB="lib"
     LINK_LIB_SUFFIX=".lib"
     LINK_OPT_SEP="-link"
 
     OBJFILE_OPT="-Fo"
     EXEFILE_OPT="-Fe"
-    AR="lib"
+    AR="lib.exe"
     ARFLAGS="-nologo"
     AR_LIBFILE_OPT="-OUT:"
 
@@ -1200,6 +1181,25 @@ else
     esac
 fi
 
+#-----------------------------------------------------------------------------#
+# Make sure we search /usr/local/include and /usr/local/lib for
+# header files and libraries. GNU C normally searches /usr/local/include
+# by default, but (inconsistently) on some systems, such as Solaris,
+# it does _not_ search /usr/local/lib.
+# The user might also be using a different C compiler that
+# doesn't search either of those by default.
+MERCURY_CHECK_LOCAL_C_INCL_DIRS
+CPPFLAGS="$ALL_LOCAL_C_INCL_DIRS $CPPFLAGS"
+MERCURY_CHECK_LOCAL_C_LIB_DIRS
+for dir in $ALL_LOCAL_C_LIB_DIRS kludge_for_broken_shells
+do
+    if test "$dir" != "kludge_for_broken_shells"; then
+        LIBS="-L$dir $LIBS"
+    fi
+done
+
+AC_PROG_CPP
+
 AC_CHECK_TOOL([NM], [nm], [nm])
 
 AC_SUBST(RANLIBFLAGS)
@@ -1228,9 +1228,10 @@ AC_SUBST(FIX_PATH_FOR_CC)
 AC_SUBST(CYGPATH)
 
 #-----------------------------------------------------------------------------#
-# Check for `-lm': some systems, e.g. MacOS X (Darwin), don't have it.
+# Search for `sin' in `-lm': some systems, e.g. MacOS X (Darwin),
+# do not have it, others, such as MSVC do not need it.
 # The result of this check may be overridden below.
-AC_CHECK_LIB(m, sin, [MATH_LIB=-lm], [MATH_LIB=])
+AC_SEARCH_LIBS([sin], [m], [MATH_LIB=-lm], [MATH_LIB=])
 
 #-----------------------------------------------------------------------------#
 #
@@ -4740,7 +4741,7 @@ case "$host" in
         TARGET_ENV_TYPE=msys
         ;;
     *)
-        EXT_FOR_EXE=
+        EXT_FOR_EXE=$ac_exeext
         HOST_ENV_TYPE=posix
         TARGET_ENV_TYPE=posix
         ;;
