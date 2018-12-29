@@ -95,8 +95,8 @@ ML =		$(SCRIPTS_DIR)/ml
 # We cannot use the binaries in util when cross-compiling.
 # Just assume that the default c2init and mkinit are usable.
 ifneq ($(CROSS_COMPILING),yes)
-C2INIT =	MERCURY_MKINIT=$(UTIL_DIR)/mkinit $(SCRIPTS_DIR)/c2init
-MKLIBINIT =	$(UTIL_DIR)/mkinit -k
+C2INIT =	MERCURY_MKINIT=$(UTIL_DIR)/mkinit$(EXT_FOR_EXE) $(SCRIPTS_DIR)/c2init
+MKLIBINIT =	$(UTIL_DIR)/mkinit$(EXT_FOR_EXE) -k
 endif
 MTAGS =		$(SCRIPTS_DIR)/mtags
 MTAGSFLAGS +=	$(EXTRA_MTAGSFLAGS)

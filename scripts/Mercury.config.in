@@ -121,6 +121,8 @@ DEFAULT_MCFLAGS=\
 		--linker-error-undefined-flag "@ERROR_UNDEFINED@" \
 		--fullarch "$(MERCURY_TARGET_ARCH)" \
 		--install-prefix "@PREFIX@" \
+		--mkinit-command "mkinit@EXT_FOR_EXE@" \
+		--mkinit-erl-command "mkinit_erl@EXT_FOR_EXE@" \
 		--num-real-r-regs "@NUM_REAL_R_REGS@" \
 		--num-real-r-temps "@NUM_REAL_R_TEMPS@" \
 		--conf-low-tag-bits "@LOW_TAG_BITS@" \

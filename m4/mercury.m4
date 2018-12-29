@@ -759,7 +759,7 @@ if
     $CC $nologo_opt ${cc_out_opt}conftest conftest.c 2>&1 > /dev/null
 then
     AC_CACHE_VAL(mercury_cv_cc_type,
-    mercury_cv_cc_type=`./conftest`)
+    mercury_cv_cc_type=`./conftest$ac_exeext`)
 else
     # This shouldn't happen as we have already checked for this.
     AC_MSG_ERROR([unexpected: $CC cannot create executable])
@@ -789,7 +789,7 @@ echo "$CC -o conftest contest.c" >&AC_FD_CC 2>&1
 if
     $CC -o conftest conftest.c
 then
-    mercury_cv_clang_version=`./conftest`
+    mercury_cv_clang_version=`./conftest$ac_exeext`
 else
     # This shouldn't happen as we have already checked for this.
     AC_MSG_ERROR([unexpected: $CC cannot create executable])
@@ -817,7 +817,7 @@ echo "$CC conftest.c -Fecontest" >&AC_FD_CC 2>&1
 if
     $CC conftest.c -Feconftest > /dev/null
 then
-    mercury_cv_msvc_version=`./conftest`
+    mercury_cv_msvc_version=`./conftest$ac_exeext`
 else
     # This shouldn't happen as we have already checked for this.
     AC_MSG_ERROR([unexpected: $CC cannot create executable])

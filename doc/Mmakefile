@@ -93,7 +93,7 @@ endif
 M_ENV = \
 	MERCURY_PROFILER=../profiler/mercury_profile \
 	MERCURY_COMPILER=../compiler/mercury_compile \
-	MERCURY_MKINIT=../util/mkinit \
+	MERCURY_MKINIT=../util/mkinit$(EXT_FOR_EXE) \
 	MCFLAGS=--no-mercury-stdlib-dir
 
 %.1: ../scripts/% make_manpage

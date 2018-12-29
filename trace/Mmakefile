@@ -333,6 +333,7 @@ else
 
 .PHONY: install_headers
 install_headers: $(HDRS) $(LIB_GLOBALS_H)
+	-[ -d $(INSTALL_INC_DIR) ] || mkdir -p $(INSTALL_INC_DIR)
 	cp `vpath_find $(HDRS) $(LIB_GLOBALS_H)` $(INSTALL_INC_DIR)
 
 .PHONY: install_lib
