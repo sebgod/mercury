@@ -9,6 +9,11 @@ config.log
 configure.log
 configure.help
 confdefs.h
+conftest.c
+conftest.cs
+conftest.err
+conftest.exe
+conftest.java
 so_locations
 /Mercury.options
 Mmake.common

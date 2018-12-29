@@ -56,7 +56,7 @@ BROWSER_LIB_NAME=mer_browser
 MDBCOMP_LIB_NAME=mer_mdbcomp
 SSDB_LIB_NAME=mer_ssdb
 
-MKINIT=${MERCURY_MKINIT=mkinit}
+MKINIT=${MERCURY_MKINIT=mkinit@EXT_FOR_EXE@}
 
 case $debug in true)
 	trace_opt="-t" ;;
