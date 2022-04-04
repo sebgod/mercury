@@ -9,11 +9,8 @@ trigger:
 pool:
   vmImage: windows-latest
 
-steps:
-- script: cl
-  displayName: 'Display CL version'
-
 - task: Bash@3
   inputs:
     targetType: 'inline'
-    script: 'gcc -v'
+    script: |
+      ./configure --enable-minimal-install --prefix='out/mercury-bootstrap'
